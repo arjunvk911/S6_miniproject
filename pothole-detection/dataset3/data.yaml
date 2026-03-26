@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['pothole']
+
+roboflow:
+  workspace: muhammad-suzaki-zahran
+  project: pothole-mjwzi
+  version: 1
+  license: MIT
+  url: https://universe.roboflow.com/muhammad-suzaki-zahran/pothole-mjwzi/dataset/1

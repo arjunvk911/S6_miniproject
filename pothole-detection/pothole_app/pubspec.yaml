@@ -1,0 +1,38 @@
+name: pothole_app
+description: Location-Based Real-Time Pothole Detection System - Group 4
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.11.0
+  geolocator: ^13.0.1
+  http: ^1.2.0
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
+  audioplayers: ^6.1.0
+  shared_preferences: ^2.3.2
+  cupertino_icons: ^1.0.8
+  # New features
+  provider: ^6.1.2
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  fl_chart: ^0.70.2
+  flutter_local_notifications: ^17.2.3
+  csv: ^6.0.0
+  path_provider: ^2.1.4
+  share_plus: ^10.0.2
+  connectivity_plus: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

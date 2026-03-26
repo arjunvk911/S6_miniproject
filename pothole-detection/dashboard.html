@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PotholeWatch — Smart Road Monitoring</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg: #f8fafc; --white: #ffffff; --border: rgba(226, 232, 240, 0.8);
+  --text: #0f172a; --muted: #64748b; --muted2: #94a3b8;
+  --high: #f43f5e; --high-bg: #ffe4e6;
+  --med: #f59e0b;  --med-bg: #fef3c7;
+  --low: #10b981;  --low-bg: #d1fae5;
+  --accent: #3b82f6; --accent-bg: #eff6ff; --accent-dark: #2563eb;
+  --citizen: #8b5cf6; --citizen-bg: #f5f3ff;
+  --shadow: 0 4px 20px -2px rgba(0,0,0,0.03);
+  --shadow-hover: 0 12px 30px -4px rgba(0,0,0,0.08);
+  --shadow-lg: 0 20px 40px -8px rgba(0,0,0,0.1);
+  --r: 20px; --r-sm: 10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:'Inter',sans-serif;
+  background-color: var(--bg);
+  background-image: radial-gradient(at 0% 0%, hsla(253,16%,77%,0.15) 0, transparent 50%), radial-gradient(at 50% 100%, hsla(225,39%,80%,0.15) 0, transparent 50%);
+  background-attachment: fixed;
+  color:var(--text);
+  min-height:100vh;
+}
+h1, h2, h3, .card-title, .stat-value, .nav-brand, .role-name, .dc-title, .btn { font-family: 'Outfit', sans-serif; }
+
+/* ══ PAGES ══ */
+.screen{display:none;} .screen.active{display:flex; animation:fadeIn 0.4s ease-out forwards;}
+.page-section{display:none;} .page-section.active{display:block; animation:slideUp 0.4s ease-out forwards;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+
+/* ══════════════════════════════
+   LOGIN PAGE
+══════════════════════════════ */
+#login-screen{
+  min-height:100vh;
+  align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 50%,#2563eb 100%);
+  position:relative;overflow:hidden;
+}
+#login-screen::before{
+  content:'';position:absolute;inset:0;
+  background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+/* decorative road lines */
+#login-screen::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:6px;
+  background:repeating-linear-gradient(90deg,#facc15 0,#facc15 40px,transparent 40px,transparent 80px);
+  opacity:.4;
+}
+.login-card{
+  background:var(--white);border-radius:24px;
+  padding:48px 40px;width:440px;
+  box-shadow:0 32px 72px rgba(0,0,0,.28);
+  position:relative;z-index:1;
+  animation:cardIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(24px) scale(.97);}to{opacity:1;transform:none;}}
+
+.login-logo{text-align:center;margin-bottom:30px;}
+.login-logo .icon{
+  width:60px;height:60px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:18px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;margin:0 auto 14px;
+  box-shadow:0 6px 20px rgba(37,99,235,.35);
+}
+.login-logo h1{font-size:23px;font-weight:800;letter-spacing:-.6px;}
+.login-logo p{font-size:13px;color:var(--muted);margin-top:4px;}
+
+/* ── role tabs — CITIZEN FIRST ── */
+.role-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px;}
+.role-tab{
+  padding:14px 10px;border-radius:12px;border:2px solid var(--border);
+  text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);
+}
+.role-tab:hover{border-color:var(--muted2);}
+.role-tab.active.citizen{border-color:var(--citizen);background:var(--citizen-bg);transform:translateY(-1px);box-shadow:0 4px 12px rgba(124,58,237,.15);}
+.role-tab.active.authority{border-color:var(--accent);background:var(--accent-bg);transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.15);}
+.role-tab .role-icon{font-size:22px;margin-bottom:5px;}
+.role-tab .role-name{font-size:13px;font-weight:700;}
+.role-tab .role-sub{font-size:11px;color:var(--muted);}
+
+.form-group{margin-bottom:16px;}
+.form-group label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+.form-group input{
+  width:100%;padding:12px 14px;border:1.5px solid var(--border);
+  border-radius:var(--r-sm);font-size:14px;font-family:'DM Sans',sans-serif;
+  outline:none;transition:border-color .2s,box-shadow .2s;background:var(--bg);
+}
+.form-group input:focus{border-color:var(--citizen);background:white;box-shadow:0 0 0 3px rgba(124,58,237,.08);}
+.form-group input.authority-focus:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.08);}
+
+.btn-login{
+  width:100%;padding:14px;border:none;border-radius:11px;
+  font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;
+  cursor:pointer;transition:all .2s;margin-top:8px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-login.citizen{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;box-shadow:0 4px 14px rgba(124,58,237,.4);}
+.btn-login.citizen:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,.5);}
+.btn-login.authority{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;box-shadow:0 4px 14px rgba(37,99,235,.4);}
+.btn-login.authority:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,.5);}
+
+.demo-creds{
+  margin-top:20px;padding:14px 16px;background:var(--bg);
+  border-radius:10px;font-size:12px;border:1px solid var(--border);
+}
+.demo-creds .dc-title{font-weight:700;margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;}
+.demo-creds .dc-row{display:flex;justify-content:space-between;margin-bottom:4px;align-items:center;}
+.demo-creds .dc-row:last-child{margin-bottom:0;}
+.demo-creds .dc-label{color:var(--muted);}
+.demo-creds .dc-val{font-family:'DM Mono',monospace;font-weight:600;font-size:11px;background:var(--white);padding:2px 7px;border-radius:5px;border:1px solid var(--border);}
+
+/* ══════════════════════════════
+   SHARED NAVBAR
+══════════════════════════════ */
+.app-nav{
+  background:rgba(255, 255, 255, 0.75); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255, 255, 255, 0.5);
+  padding:0 36px;height:68px;display:flex;align-items:center;
+  justify-content:space-between;position:sticky;top:0;z-index:200;
+  box-shadow:0 10px 30px -10px rgba(0,0,0,0.03);
+}
+.nav-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.3px;}
+.nav-dot{width:9px;height:9px;border-radius:50%;animation:pulse 2s infinite;}
+.nav-dot.authority{background:var(--accent);}
+.nav-dot.citizen{background:var(--citizen);}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.4);}}
+.nav-right{display:flex;align-items:center;gap:10px;}
+.nav-role-badge{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;}
+.nav-role-badge.authority{background:var(--accent-bg);color:var(--accent);}
+.nav-role-badge.citizen{background:var(--citizen-bg);color:var(--citizen);}
+.nav-user{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;}
+.nav-user.authority{background:var(--accent);}
+.nav-user.citizen{background:var(--citizen);}
+.btn-logout{padding:7px 14px;border:1.5px solid var(--border);background:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;}
+.btn-logout:hover{border-color:var(--high);color:var(--high);}
+
+/* ══ TABS ══ */
+.app-tabs{background:var(--white);border-bottom:1px solid var(--border);padding:0 28px;display:flex;gap:4px;}
+.app-tab{padding:13px 18px;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;}
+.app-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.app-tab.active.citizen-tab{color:var(--citizen);border-bottom-color:var(--citizen);}
+.app-tab:hover:not(.active){color:var(--text);}
+
+/* ══ LAYOUT ══ */
+.app-body{padding:24px 28px;max-width:1400px;margin:0 auto;}
+.page-section{display:none;} .page-section.active{display:block;}
+
+/* ══ STATS ══ */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;margin-bottom:28px;}
+.stat-card{background:var(--white);border:1px solid rgba(255,255,255,0.7);border-radius:var(--r);padding:24px;box-shadow:var(--shadow);transition:all .3s cubic-bezier(0.2,0.8,0.2,1);}
+.stat-card:hover{transform:translateY(-4px); box-shadow:var(--shadow-hover); border-color:rgba(226,232,240,0.9);}
+.stat-label{font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+.stat-value{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:8px;}
+.stat-sub{font-size:12px;font-weight:500;color:var(--muted);}
+.sv-total{color:var(--accent);} .sv-high{color:var(--high);} .sv-med{color:var(--med);} .sv-low{color:var(--low);} .sv-repaired{color:#10b981;}
+
+/* ══ CARDS ══ */
+.card{background:var(--white);border:1px solid rgba(255,255,255,0.5);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;margin-bottom:24px;transition:box-shadow .3s;}
+.card:hover{box-shadow:var(--shadow-hover);}
+.card-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(248,250,252,0.4);}
+.card-title{font-size:16px;font-weight:700;letter-spacing:-.2px;color:var(--text);}
+.card-body{padding:24px;}
+
+/* ══ MAP ══ */
+.map-grid{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-bottom:20px;}
+#auth-map{height:380px;}
+.map-legend{padding:12px 18px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+.leg-items{display:flex;gap:18px;}
+.leg-item{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;}
+.leg-dot{width:10px;height:10px;border-radius:50%;}
+
+/* ══ RECENT LIST ══ */
+.recent-item{padding:11px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .15s;}
+.recent-item:hover{background:var(--bg);}
+.recent-item:last-child{border-bottom:none;}
+.ri-thumb{width:44px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg);}
+.ri-thumb-ph{width:44px;height:34px;border-radius:6px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.ri-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.ri-info{flex:1;min-width:0;}
+.ri-title{font-size:13px;font-weight:600;}
+.ri-sub{font-size:11px;color:var(--muted);}
+
+/* ══ TABLE ══ */
+.tbl-wrap{background:var(--white);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--bg);}
+th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);}
+td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--bg);}
+.tbl-thumb{width:56px;height:42px;object-fit:cover;border-radius:7px;display:block;}
+.tbl-thumb-ph{width:56px;height:42px;border-radius:7px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px;}
+
+/* ══ BADGES ══ */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.3px;}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;}
+.badge-HIGH{background:var(--high-bg);color:var(--high);} .badge-HIGH::before{background:var(--high);}
+.badge-MEDIUM{background:var(--med-bg);color:var(--med);} .badge-MEDIUM::before{background:var(--med);}
+.badge-LOW{background:var(--low-bg);color:var(--low);}   .badge-LOW::before{background:var(--low);}
+.badge-NONE{background:#f3f4f6;color:var(--muted);}
+
+.status-pill{padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;}
+.sp-Pending{background:#fef9c3;color:#854d0e;}
+.sp-WIP{background:#dbeafe;color:#1d4ed8;}
+.sp-Repaired{background:var(--low-bg);color:#15803d;}
+
+/* ══ FILTER BAR ══ */
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.f-btn{padding:5px 13px;border-radius:20px;border:1.5px solid var(--border);background:var(--white);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.f-btn:hover,.f-btn.fa{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);}
+.f-btn.fh.fa{border-color:var(--high);color:var(--high);background:var(--high-bg);}
+.f-btn.fm.fa{border-color:var(--med);color:var(--med);background:var(--med-bg);}
+.f-btn.fl.fa{border-color:var(--low);color:var(--low);background:var(--low-bg);}
+
+/* ══ BUTTONS ══ */
+.btn{padding:10px 20px;border:none;border-radius:99px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s cubic-bezier(0.2,0.8,0.2,1);display:inline-flex;align-items:center;justify-content:center;gap:8px;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#1d4ed8);color:white;box-shadow:0 4px 12px rgba(37,99,235,0.3);} 
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(37,99,235,0.4);}
+.btn-citizen{background:linear-gradient(135deg,var(--citizen),#6d28d9);color:white;box-shadow:0 4px 12px rgba(124,58,237,0.3);} 
+.btn-citizen:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(124,58,237,0.4);}
+.btn-outline{background:var(--white);border:1.5px solid var(--border);color:var(--text);box-shadow:0 2px 4px rgba(0,0,0,0.02);} 
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,0.05);}
+.btn-sm{padding:8px 16px;font-size:13px;}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:translateY(0)!important;box-shadow:none!important;}
+.btn-full{width:100%;justify-content:center;}
+
+/* ══ CITIZEN — UPLOAD ══ */
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);margin-bottom:14px;}
+.upload-zone:hover,.upload-zone.dov{border-color:var(--citizen);background:var(--citizen-bg);}
+.uz-icon{width:44px;height:44px;background:var(--citizen-bg);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px;}
+.uz-title{font-size:14px;font-weight:600;margin-bottom:3px;}
+.uz-sub{font-size:12px;color:var(--muted);}
+
+#c-preview{display:none;border-radius:10px;overflow:hidden;margin-bottom:14px;position:relative;}
+#c-preview img{width:100%;max-height:200px;object-fit:contain;display:block;}
+#c-preview .rm-btn{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);color:white;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:600;}
+
+.coord-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.inp-grp label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
+.inp-grp input,.inp-grp textarea,.inp-grp select{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;background:var(--bg);}
+.inp-grp input:focus,.inp-grp textarea:focus,.inp-grp select:focus{border-color:var(--citizen);background:white;}
+
+/* ══ DETECT RESULT ══ */
+#c-result{display:none;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:14px;}
+.cr-head{padding:12px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.cr-rows{padding:0 16px 12px;}
+.cr-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.cr-row:last-child{border-bottom:none;}
+.cr-key{color:var(--muted);}
+.cr-val{font-weight:600;font-family:'DM Mono',monospace;font-size:12px;}
+
+/* ══ WEBCAM ══ */
+#webcam-container{position:relative;border-radius:12px;overflow:hidden;background:#111;margin-bottom:14px;}
+#webcam-feed{width:100%;max-height:260px;object-fit:contain;display:block;}
+#webcam-overlay{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.7);color:white;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;}
+.webcam-btns{display:flex;gap:8px;margin-bottom:14px;}
+
+/* ══ COMPLAINT / RATING ══ */
+.stars{display:flex;gap:6px;margin-bottom:14px;}
+.star{font-size:28px;cursor:pointer;transition:transform .15s;filter:grayscale(1);}
+.star.active,.star:hover{filter:none;transform:scale(1.15);}
+
+/* ══ MY REPORTS ══ */
+.my-report-card{
+  border:1px solid rgba(255,255,255,0.5);border-radius:18px;
+  overflow:hidden;margin-bottom:18px;background:var(--white);
+  transition:all .3s cubic-bezier(0.2,0.8,0.2,1);box-shadow:var(--shadow);
+}
+.my-report-card:hover{box-shadow:var(--shadow-hover);transform:translateY(-4px);border-color:var(--border);}
+.mrc-img{width:100%;height:160px;object-fit:cover;display:block;background:var(--bg);border-radius:18px 18px 0 0;}
+.mrc-img-ph{width:100%;height:160px;background:linear-gradient(135deg,var(--bg),#e5e7eb);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--muted2);border-radius:18px 18px 0 0;}
+.mrc-body-pad{padding:14px 16px;}
+.mrc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.mrc-id{font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:var(--muted);}
+.mrc-meta{font-size:12px;color:var(--muted);margin-top:4px;}
+.mrc-detail{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;}
+.mrc-chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:var(--bg);}
+
+/* ══ COMPLAINT CARDS ══ */
+.complaint-card{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;background:var(--white);}
+.cc-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.cc-meta{font-size:12px;color:var(--muted);}
+.cc-msg{font-size:13px;margin-bottom:8px;}
+.rating-stars{display:inline-flex;gap:2px;}
+
+/* ══ IMAGE MODAL ══ */
+#img-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;align-items:center;justify-content:center;}
+#img-modal.open{display:flex;}
+#img-modal img{max-width:90vw;max-height:88vh;border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);}
+#img-modal-close{position:absolute;top:20px;right:24px;color:white;font-size:28px;cursor:pointer;line-height:1;opacity:.8;}
+#img-modal-close:hover{opacity:1;}
+
+/* ══ TOAST ══ */
+#toast{position:fixed;bottom:22px;right:22px;background:var(--text);color:white;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;pointer-events:none;max-width:300px;}
+#toast.show{opacity:1;transform:translateY(0);}
+
+/* ══ SPINNER ══ */
+.spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:white;border-radius:50%;animation:sp .7s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+
+/* ══ EMPTY ══ */
+.empty{text-align:center;padding:40px 20px;color:var(--muted);}
+.empty .ei{font-size:36px;margin-bottom:10px;}
+.empty .et{font-weight:600;font-size:14px;margin-bottom:4px;}
+
+select.status-sel{padding:5px 9px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;background:white;cursor:pointer;outline:none;}
+.mono{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);}
+
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.sec-title{font-size:16px;font-weight:700;letter-spacing:-.3px;}
+
+/* ══ REPORTS GRID ══ */
+.reports-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     LOGIN SCREEN
+═══════════════════════════════════════ -->
+<div id="login-screen" class="screen active">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="icon">🛣️</div>
+      <h1>PotholeWatch</h1>
+      <p>Smart Road Monitoring System — Kerala PWD</p>
+    </div>
+
+    <!-- CITIZEN FIRST, then AUTHORITY -->
+    <div class="role-tabs">
+      <div class="role-tab citizen active" id="tab-cit" onclick="selectRole('citizen')">
+        <div class="role-icon">👤</div>
+        <div class="role-name">Citizen</div>
+        <div class="role-sub">Road User</div>
+      </div>
+      <div class="role-tab authority" id="tab-auth" onclick="selectRole('authority')">
+        <div class="role-icon">🏛️</div>
+        <div class="role-name">Authority</div>
+        <div class="role-sub">PWD Officer</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="inp-user" placeholder="Enter username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="inp-pass" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login citizen" id="login-btn" onclick="doLogin()">👤 Login as Citizen</button>
+
+    <div class="demo-creds">
+      <div class="dc-title">🔑 Demo Credentials</div>
+      <div class="dc-row"><span class="dc-label">Citizen:</span><span class="dc-val">citizen / user123</span></div>
+      <div class="dc-row"><span class="dc-label">PWD Authority:</span><span class="dc-val">pwd / pwd123</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     AUTHORITY DASHBOARD
+═══════════════════════════════════════ -->
+<div id="auth-screen" class="screen" style="flex-direction:column;min-height:100vh;">
+  <nav class="app-nav">
+    <div class="nav-brand">
+      <div class="nav-dot authority"></div>
+      PotholeWatch
+      <span style="color:var(--muted);font-weight:400;font-size:13px;">Authority Panel</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-role-badge authority" id="auth-badge">🏛️ Kerala PWD</span>
+      <div class="nav-user authority">A</div>
+      <button class="btn-logout" onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="app-tabs">
+    <div class="app-tab active" onclick="authTab('overview',this)">📊 Overview</div>
+    <div class="app-tab" onclick="authTab('reports',this)">📋 All Reports</div>
+    <div class="app-tab" onclick="authTab('complaints',this)">📨 Complaints</div>
+    <div class="app-tab" onclick="authTab('ratings',this)">⭐ Ratings</div>
+  </div>
+
+  <div class="app-body">
+
+    <!-- OVERVIEW -->
+    <div id="auth-overview" class="page-section active">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Total Reports</div><div class="stat-value sv-total" id="s-total">0</div><div class="stat-sub">All detections</div></div>
+        <div class="stat-card"><div class="stat-label">🔴 HIGH</div><div class="stat-value sv-high" id="s-high">0</div><div class="stat-sub">Urgent repair</div></div>
+        <div class="stat-card"><div class="stat-label">🟠 MEDIUM</div><div class="stat-value sv-med" id="s-med">0</div><div class="stat-sub">Scheduled maint.</div></div>
+        <div class="stat-card"><div class="stat-label">🟢 LOW</div><div class="stat-value sv-low" id="s-low">0</div><div class="stat-sub">Monitor only</div></div>
+        <div class="stat-card"><div class="stat-label">✅ REPAIRED</div><div class="stat-value sv-repaired" id="s-repaired">0</div><div class="stat-sub">Completed work</div></div>
+      </div>
+
+      <div class="map-grid">
+        <div class="card" style="margin:0;">
+          <div class="card-head">
+            <span class="card-title">🗺️ Live Pothole Map — GPS Geotagged</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="locateMe()">📍 My Location</button>
+              <button class="btn btn-primary btn-sm" onclick="loadReports()">↻ Refresh</button>
+            </div>
+          </div>
+          <div id="auth-map"></div>
+          <div class="map-legend">
+            <div class="leg-items">
+              <div class="leg-item"><div class="leg-dot" style="background:var(--high)"></div>HIGH</div>
+              <div class="leg-item"><div class="leg-dot" style="background:var(--med)"></div>MEDIUM</div>
+              <div class="leg-item"><div class="leg-dot" style="background:var(--low)"></div>LOW</div>
+            </div>
+            <span style="font-size:11px;color:var(--muted);">Click any pin for details</span>
+          </div>
+        </div>
+
+        <!-- RECENT REPORTS WITH IMAGE -->
+        <div class="card" style="margin:0;">
+          <div class="card-head"><span class="card-title">🔔 Recent Reports</span></div>
+          <div id="recent-list" style="max-height:430px;overflow-y:auto;">
+            <div class="empty"><div class="ei">📭</div><div class="et">No reports yet</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALL REPORTS TABLE WITH IMAGE COLUMN -->
+    <div id="auth-reports" class="page-section">
+      <div class="sec-head">
+        <div class="sec-title">All Pothole Reports</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div class="filter-bar">
+            <button class="f-btn fa" onclick="setFilter('ALL',this)">All</button>
+            <button class="f-btn fh" onclick="setFilter('HIGH',this)">🔴 HIGH</button>
+            <button class="f-btn fm" onclick="setFilter('MEDIUM',this)">🟠 MEDIUM</button>
+            <button class="f-btn fl" onclick="setFilter('LOW',this)">🟢 LOW</button>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 Export CSV</button>
+          <button class="btn btn-primary btn-sm" onclick="loadReports()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div class="tbl-wrap" style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th>Image</th>
+            <th>Report ID</th>
+            <th>Timestamp</th>
+            <th>Severity</th>
+            <th>Potholes</th>
+            <th>GPS</th>
+            <th>Jurisdiction</th>
+            <th>Status</th>
+            <th>Update</th>
+          </tr></thead>
+          <tbody id="reports-tbody">
+            <tr><td colspan="8"><div class="empty"><div class="ei">📭</div><div class="et">No reports yet</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- COMPLAINTS -->
+    <div id="auth-complaints" class="page-section">
+      <div class="sec-head">
+        <div class="sec-title">📨 Citizen Complaints</div>
+        <button class="btn btn-primary btn-sm" onclick="loadAuthComplaints()">↻ Refresh</button>
+      </div>
+      <div id="auth-complaints-list">
+        <div class="empty"><div class="ei">📭</div><div class="et">No complaints yet</div></div>
+      </div>
+    </div>
+
+    <!-- RATINGS -->
+    <div id="auth-ratings" class="page-section">
+      <div class="sec-head"><div class="sec-title">⭐ Service Ratings</div></div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat-card"><div class="stat-label">Avg Rating</div><div class="stat-value sv-total" id="avg-rating">—</div><div class="stat-sub">out of 5</div></div>
+        <div class="stat-card"><div class="stat-label">Total Ratings</div><div class="stat-value sv-total" id="total-ratings">0</div><div class="stat-sub">from citizens</div></div>
+        <div class="stat-card"><div class="stat-label">5★ Reviews</div><div class="stat-value sv-low" id="five-star">0</div><div class="stat-sub">excellent</div></div>
+      </div>
+      <div id="ratings-list">
+        <div class="empty"><div class="ei">⭐</div><div class="et">No ratings yet</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     CITIZEN INTERFACE
+═══════════════════════════════════════ -->
+<div id="citizen-screen" class="screen" style="flex-direction:column;min-height:100vh;">
+  <nav class="app-nav">
+    <div class="nav-brand">
+      <div class="nav-dot citizen"></div>
+      PotholeWatch
+      <span style="color:var(--muted);font-weight:400;font-size:13px;">Citizen Portal</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-role-badge citizen">👤 Citizen</span>
+      <div class="nav-user citizen">C</div>
+      <button class="btn-logout" onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="app-tabs">
+    <div class="app-tab active citizen-tab" onclick="citTab('report',this)">📷 Report Pothole</div>
+    <div class="app-tab citizen-tab" onclick="citTab('live',this)">🎥 Live Detection</div>
+    <div class="app-tab citizen-tab" onclick="citTab('myreports',this)">📜 My Reports</div>
+    <div class="app-tab citizen-tab" onclick="citTab('complaint',this)">📨 Complaint</div>
+    <div class="app-tab citizen-tab" onclick="citTab('rate',this)">⭐ Rate Service</div>
+    <div class="app-tab citizen-tab" onclick="citTab('awareness',this)">💡 Road Safety</div>
+  </div>
+
+  <div class="app-body">
+
+    <!-- REPORT POTHOLE -->
+    <div id="cit-report" class="page-section active" style="max-width:580px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">📷 Report a Pothole</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Upload image or video — AI will auto-detect severity</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-outline btn-full btn-sm" onclick="document.getElementById('img-input').click()">📷 Image</button>
+            <button class="btn btn-outline btn-full btn-sm" onclick="document.getElementById('vid-input').click()">🎥 Video</button>
+            <button class="btn btn-full btn-sm" style="background:#F9F9F9; border:1px solid black; color:black;" onclick="citTab('live',null)">📹 Live Cam</button>
+          </div>
+          <input type="file" id="img-input" accept="image/*" style="display:none" onchange="handleCitFile(this.files[0],'image')">
+          <input type="file" id="vid-input" accept="video/*" style="display:none" onchange="handleCitFile(this.files[0],'video')">
+
+          <div class="upload-zone" id="c-upload-zone" onclick="document.getElementById('img-input').click()"
+               ondragover="event.preventDefault();this.classList.add('dov')"
+               ondragleave="this.classList.remove('dov')"
+               ondrop="handleCitDrop(event)">
+            <div class="uz-icon">📁</div>
+            <div class="uz-title">Drop image/video here</div>
+            <div class="uz-sub">JPG, PNG, MP4 supported</div>
+          </div>
+
+          <div id="c-preview">
+            <img id="c-prev-img" src="" alt="">
+            <button class="rm-btn" onclick="clearCitFile()">✕ Remove</button>
+          </div>
+
+          <div class="coord-row">
+            <div class="inp-grp">
+              <label>📍 Latitude</label>
+              <input type="number" id="c-lat" placeholder="Auto-detected" step="0.0001">
+            </div>
+            <div class="inp-grp">
+              <label>📍 Longitude</label>
+              <input type="number" id="c-lng" placeholder="Auto-detected" step="0.0001">
+            </div>
+          </div>
+
+          <button class="btn btn-outline btn-full" style="margin-bottom:12px;" onclick="getCitLocation()">🛰️ Auto-detect My Location</button>
+
+          <div class="inp-grp" style="margin-bottom:14px;">
+            <label>📝 Description (optional)</label>
+            <textarea id="c-desc" rows="2" placeholder="Describe the pothole location..."></textarea>
+          </div>
+
+          <!-- Data storage info box -->
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 14px;font-size:12px;color:#166534;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
+            <span style="font-size:16px;">🔒</span>
+            <div><strong>Where is your data stored?</strong><br>Your image and GPS are securely sent to our FastAPI backend and saved in <b>Firebase Firestore</b> (Google Cloud). Authorities can view it on the dashboard map. Only road maintenance data is stored — no personal info.</div>
+          </div>
+
+          <button class="btn btn-citizen btn-full" id="c-detect-btn" onclick="citizenDetect()">
+            🔍 Submit & Detect with AI
+          </button>
+
+          <div id="c-result">
+            <div class="cr-head" id="c-result-head"></div>
+            <div class="cr-rows" id="c-result-rows"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CITIZEN GLOBAL IMPACT STATS (MOVED DOWN) -->
+      <div style="margin-top:24px;">
+        <div style="font-size:16px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+          🌍 Real-Time System Impact
+          <span style="font-size:12px;font-weight:500;color:var(--muted);background:var(--bg);padding:4px 10px;border-radius:20px;">Live from Firebase</span>
+        </div>
+        <div class="stats-grid" id="cit-stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="stat-card" style="grid-column: span 2; display: flex; justify-content: space-between; align-items: center; padding: 20px 24px;">
+            <div><div class="stat-label" style="margin-bottom:4px;">Total Reports</div><div class="stat-sub">Across all roads</div></div>
+            <div class="stat-value sv-total" id="c-total" style="margin-bottom:0; font-size:42px;">0</div>
+          </div>
+          <div class="stat-card" style="padding:18px;"><div class="stat-label">🔴 HIGH</div><div class="stat-value sv-high" id="c-high">0</div></div>
+          <div class="stat-card" style="padding:18px;"><div class="stat-label">🟠 MEDIUM</div><div class="stat-value sv-med" id="c-med">0</div></div>
+          <div class="stat-card" style="padding:18px;"><div class="stat-label">🟢 LOW</div><div class="stat-value sv-low" id="c-low">0</div></div>
+          <div class="stat-card" style="padding:18px;"><div class="stat-label">✅ REPAIRED</div><div class="stat-value sv-repaired" id="c-repaired">0</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE DETECTION -->
+    <div id="cit-live" class="page-section" style="max-width:580px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">📹 Live Camera Detection</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Real-time pothole detection via webcam</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="webcam-container" style="display:none;">
+            <div style="position:relative; background:#111; border-radius:12px; overflow:hidden;">
+              <video id="webcam-feed" autoplay muted playsinline style="width:100%; display:block;"></video>
+              <canvas id="live-overlay-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
+              
+              <div id="top-alert-panel" style="position:absolute; top:-60px; left:50%; transform:translateX(-50%); background:#ef4444; color:white; padding:8px 24px; border-radius:20px; font-size:13px; font-weight:800; box-shadow:0 10px 25px rgba(0,0,0,0.4); transition:top 0.4s cubic-bezier(0.175,0.885,0.32,1.275); z-index:10; pointer-events:none;">⚠️ HIGH SEVERITY POTHOLE</div>
+            </div>
+            <canvas id="webcam-canvas" style="display:none;"></canvas>
+          </div>
+          <div id="webcam-placeholder" style="background:#111;border-radius:12px;height:220px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;flex-direction:column;gap:12px;color:white;">
+            <div style="font-size:40px;">📹</div>
+            <div style="font-size:14px;font-weight:600;">Camera not started</div>
+          </div>
+          <div class="webcam-btns">
+            <button class="btn btn-citizen btn-full" id="start-cam-btn" onclick="startWebcam()">▶ Start Camera</button>
+            <button class="btn btn-outline btn-full" id="stop-cam-btn" onclick="stopWebcam()" style="display:none;">⏹ Stop Camera</button>
+          </div>
+          <div style="background:#e0f2fe; border-radius:10px; padding:16px; margin-top:14px;">
+            <div style="font-size:12px; color:#0369a1; font-weight:600; margin-bottom:14px;">
+               ℹ️ How it works: Camera captures live video → Every 4 seconds a frame is sent to the AI backend → Potholes detected in real-time! HIGH/MEDIUM severity auto-reported to authorities.
+            </div>
+            <div id="capture-verification" style="display:none; gap:14px; align-items:center;">
+              <div>
+                <img id="cv-thumb" src="" style="width:120px; height:80px; object-fit:cover; border-radius:6px; border:2px solid #38bdf8;">
+                <div style="font-size:11px; color:#0c4a6e; margin-top:6px; font-weight:700;">Stored Image #<span id="cv-id"></span></div>
+              </div>
+              <div style="background:white; border-radius:8px; padding:12px; flex:1; border:1px solid #bae6fd; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                <div style="font-size:12px; font-weight:800; color:#0ea5e9; margin-bottom:4px;">☁️ Result Data</div>
+                <div style="font-size:11px; color:#475569;">Stored securely. View full result in 'My Reports' (with image)</div>
+              </div>
+            </div>
+            <div id="capture-verification-placeholder" style="font-size:12px; color:#0ea5e9; font-weight:600;">
+               Pothole images are auto-captured, stored, and attached to your reports upon detection.
+            </div>
+          </div>
+          <div id="live-result" style="margin-top:12px; display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MY REPORTS — with images -->
+    <div id="cit-myreports" class="page-section">
+      <div class="sec-head">
+        <div class="sec-title">📜 My Reports</div>
+        <button class="btn btn-citizen btn-sm" onclick="loadMyReports()">↻ Refresh</button>
+      </div>
+      <div id="my-reports-list">
+        <div class="empty"><div class="ei">📭</div><div class="et">No reports yet</div><div>Submit your first pothole report!</div></div>
+      </div>
+    </div>
+
+    <!-- COMPLAINT -->
+    <div id="cit-complaint" class="page-section" style="max-width:580px;">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📨 File a Complaint</div>
+        </div>
+        <div class="card-body">
+          <div class="inp-grp" style="margin-bottom:14px;">
+            <label>Complaint Type</label>
+            <select id="comp-type">
+              <option>Road not repaired after report</option>
+              <option>Wrong severity classification</option>
+              <option>GPS location inaccurate</option>
+              <option>Authority not responding</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="inp-grp" style="margin-bottom:14px;">
+            <label>Report ID (optional)</label>
+            <input type="text" id="comp-reportid" placeholder="e.g. #abc12345">
+          </div>
+          <div class="inp-grp" style="margin-bottom:16px;">
+            <label>Your Complaint</label>
+            <textarea id="comp-msg" rows="4" placeholder="Describe your issue in detail..."></textarea>
+          </div>
+          <button class="btn btn-citizen btn-full" onclick="submitComplaint()">📤 Submit Complaint</button>
+          <!-- Show submitted complaints below -->
+          <div id="my-complaints-preview" style="margin-top:20px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RATE SERVICE -->
+    <div id="cit-rate" class="page-section" style="max-width:580px;">
+      <div class="card">
+        <div class="card-head"><div class="card-title">⭐ Rate the Road Service</div></div>
+        <div class="card-body">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-size:14px;font-weight:600;margin-bottom:16px;color:var(--muted);">How satisfied are you with road maintenance?</div>
+            <div class="stars" id="star-row" style="justify-content:center;">
+              <span class="star" onclick="setStar(1)">⭐</span>
+              <span class="star" onclick="setStar(2)">⭐</span>
+              <span class="star" onclick="setStar(3)">⭐</span>
+              <span class="star" onclick="setStar(4)">⭐</span>
+              <span class="star" onclick="setStar(5)">⭐</span>
+            </div>
+            <div id="star-label" style="font-size:14px;color:var(--muted);margin-top:8px;">Tap a star to rate</div>
+          </div>
+          <div class="inp-grp" style="margin-bottom:16px;">
+            <label>Additional Comments</label>
+            <textarea id="rate-comment" rows="3" placeholder="Share your experience..."></textarea>
+          </div>
+          <button class="btn btn-citizen btn-full" onclick="submitRating()">⭐ Submit Rating</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROAD SAFETY AWARENESS -->
+    <div id="cit-awareness" class="page-section">
+      <div class="card" style="border:none; box-shadow:none; background:transparent;">
+        <div style="text-align:center; margin-bottom:32px;">
+          <h2 style="font-size:32px; font-weight:800; color:var(--text); letter-spacing:-1px; font-family:'Outfit',sans-serif;">Your Safety is Our Priority</h2>
+          <p style="font-size:16px; color:var(--muted); margin-top:8px; max-width:600px; margin-left:auto; margin-right:auto;">PotholeWatch utilizes state-of-the-art Artificial Intelligence to automatically eliminate lethal road hazards across Kerala.</p>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:24px;">
+          <div class="card" style="padding:24px; text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">🧠</div>
+            <h3 style="font-size:18px; margin-bottom:8px; font-family:'Outfit',sans-serif;">AI-Powered Vision</h3>
+            <p style="font-size:14px; color:var(--muted); line-height:1.6;">Our YOLO machine learning engine actively scans live camera feeds to automatically isolate dangerous road fractures, instantly calculating surface area and severity metrics.</p>
+          </div>
+          <div class="card" style="padding:24px; text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">🛰️</div>
+            <h3 style="font-size:18px; margin-bottom:8px; font-family:'Outfit',sans-serif;">Accurate Telemetry</h3>
+            <p style="font-size:14px; color:var(--muted); line-height:1.6;">When a fracture is found, our system automatically tags the geographic location and uses reverse-geocoding to seamlessly route the report to either the NHAI or local Kerala PWD.</p>
+          </div>
+          <div class="card" style="padding:24px; text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">🚨</div>
+            <h3 style="font-size:18px; margin-bottom:8px; font-family:'Outfit',sans-serif;">Live Driver Alerts</h3>
+            <p style="font-size:14px; color:var(--muted); line-height:1.6;">Acting as a smart dashcam, the app rapidly delivers auditory voice warnings to the driver regarding an upcoming pothole, preventing catastrophic vehicular accidents.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UNIVERSAL FOOTER -->
+    <div style="text-align:center; padding:40px 20px; font-size:13px; color:var(--muted2); border-top:1px solid rgba(0,0,0,0.05); margin-top:40px;">
+      <div style="font-weight:700; color:var(--muted); margin-bottom:4px;">© 2026 PotholeWatch — Smart Road Monitoring</div>
+      Developed by Group 4 (Adithyan, Arjun, Anandhu, Chirag) | College of Engineering and Management Punnapra
+    </div>
+
+  </div>
+</div>
+
+<!-- IMAGE FULLSCREEN MODAL -->
+<div id="img-modal" onclick="closeModal()">
+  <span id="img-modal-close" onclick="closeModal()">✕</span>
+  <img id="img-modal-src" src="" alt="">
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let authMap, authMarkers = [];
+let allReports = [], filterMode = 'ALL';
+let currentRole = 'citizen'; // ← default is citizen now
+let currentAuth = 'PWD'; // NHAI or PWD
+let selectedStar = 0;
+let webcamStream = null, webcamInterval = null;
+let citFile = null;
+let currentLat = '0', currentLng = '0';
+let lastAudioTime = 0;
+let audioCtx = null;
+
+// Filter reports by jurisdiction logic
+function getAuthReports() {
+  return allReports.filter(r => (r.jurisdiction || 'PWD') === currentAuth);
+}
+
+// ════ MODAL ════
+function openModal(src) {
+  document.getElementById('img-modal-src').src = src;
+  document.getElementById('img-modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('img-modal').classList.remove('open');
+}
+
+// ════ ROLES ════
+function selectRole(role) {
+  currentRole = role;
+  document.getElementById('tab-auth').classList.toggle('active', role==='authority');
+  document.getElementById('tab-cit').classList.toggle('active', role==='citizen');
+  const btn = document.getElementById('login-btn');
+  btn.className = `btn-login ${role}`;
+  btn.textContent = role==='authority' ? '🏛️ Login as Authority' : '👤 Login as Citizen';
+  // Update input focus color
+  document.querySelectorAll('.form-group input').forEach(inp => {
+    inp.className = role==='authority' ? 'authority-focus' : '';
+  });
+}
+
+// ════ LOGIN ════
+function doLogin() {
+  const u = document.getElementById('inp-user').value.trim();
+  const p = document.getElementById('inp-pass').value.trim();
+  if (currentRole==='authority') {
+    if (u==='pwd' && p==='pwd123') { currentAuth = 'PWD'; showScreen('auth'); }
+    else { showToast('❌ Invalid credentials'); return; }
+    document.getElementById('auth-badge').textContent = `🏛️ Kerala PWD`;
+  } else {
+    if(u==='citizen' && p==='user123') showScreen('citizen');
+    else { showToast('❌ Invalid credentials'); return; }
+  }
+  showToast(`✅ Welcome, ${u}!`);
+}
+
+function logout() {
+  showScreen('login');
+  document.getElementById('inp-user').value='';
+  document.getElementById('inp-pass').value='';
+  stopWebcam();
+}
+
+let authPoll = null;
+function showScreen(s) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  document.getElementById(s+'-screen').classList.add('active');
+  if(authPoll) clearInterval(authPoll);
+  if(s==='auth') { 
+    setTimeout(()=>{initAuthMap();loadReports();},100); 
+    authPoll = setInterval(loadReports, 60000); // Throttled to 60s to save DB quota
+  } else if (s==='citizen') {
+    setTimeout(()=>{loadReports();},100);
+    authPoll = setInterval(loadReports, 60000); // Throttled to 60s
+  }
+}
+
+// ════ AUTHORITY TABS ════
+function authTab(tab, el) {
+  document.querySelectorAll('#auth-screen .app-tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.querySelectorAll('#auth-screen .page-section').forEach(p=>p.classList.remove('active'));
+  document.getElementById('auth-'+tab).classList.add('active');
+  if(tab==='complaints') loadAuthComplaints();
+  if(tab==='ratings') loadRatings();
+  if(tab==='reports') renderTable();
+}
+
+// ════ CITIZEN TABS ════
+function citTab(tab, el) {
+  document.querySelectorAll('#citizen-screen .app-tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  else {
+    document.querySelectorAll('#citizen-screen .app-tab').forEach((t,i)=>{
+      if(['report','live','myreports','complaint','rate','awareness'][i]===tab) t.classList.add('active');
+    });
+  }
+  document.querySelectorAll('#citizen-screen .page-section').forEach(p=>p.classList.remove('active'));
+  document.getElementById('cit-'+tab).classList.add('active');
+  if(tab==='myreports') loadMyReports();
+  if(tab==='complaint') loadMyComplaints();
+}
+
+// ════ MAP ════
+function initAuthMap() {
+  if(authMap) return;
+  // Start at Kerala default, then auto-locate
+  authMap = L.map('auth-map').setView([10.8505, 76.2711], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap',maxZoom:19
+  }).addTo(authMap);
+
+  // Auto-locate to user's actual GPS location
+  if(navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const youIcon = L.divIcon({
+          html:`<div style="width:16px;height:16px;background:#2563eb;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(37,99,235,.5)"></div>`,
+          className:'',iconSize:[16,16],iconAnchor:[8,8]
+        });
+        L.marker([pos.coords.latitude, pos.coords.longitude],{icon:youIcon})
+          .bindPopup('<b>📍 Your Location</b>')
+          .addTo(authMap);
+        authMap.setView([pos.coords.latitude, pos.coords.longitude], 16);
+      },
+      () => {} // silently fall back to default
+    );
+  }
+}
+
+function locateMe() {
+  if(!authMap){ showToast('⚠️ Map not ready'); return; }
+  if(!navigator.geolocation){ showToast('⚠️ Geolocation not supported'); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      authMap.flyTo([pos.coords.latitude, pos.coords.longitude], 17);
+      showToast('📍 Moved to your location!');
+    },
+    () => showToast('⚠️ Could not get location')
+  );
+}
+
+function markerColor(sev) { return sev==='HIGH'?'#ef4444':sev==='MEDIUM'?'#f97316':'#16a34a'; }
+
+function updateMap() {
+  if (!authMap) return;
+  authMarkers.forEach(m=>authMap.removeLayer(m)); authMarkers=[];
+  getAuthReports().forEach(r=>{
+    if(!r.latitude||!r.longitude) return;
+    const c = markerColor(r.severity);
+    const icon = L.divIcon({
+      html:`<div style="width:14px;height:14px;background:${c};border-radius:50%;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>`,
+      className:'',iconSize:[14,14],iconAnchor:[7,7]
+    });
+    const imgHtml = r.image_url
+      ? `<img src="${API}${r.image_url}" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:8px;display:block;">`
+      : '';
+    const m = L.marker([r.latitude,r.longitude],{icon})
+      .bindPopup(`<div style="font-family:'DM Sans',sans-serif;min-width:180px;">
+        ${imgHtml}
+        <b>Report #${r.id}</b><br>
+        <span style="color:${c};font-weight:700;">${r.severity}</span>
+        <br><small>${r.total} pothole(s) • ${r.status}</small>
+        <br><small style="color:#6b7280;">${new Date(r.timestamp).toLocaleString()}</small>
+      </div>`)
+      .addTo(authMap);
+    authMarkers.push(m);
+  });
+}
+
+// ════ LOAD DATA ════
+async function loadReports() {
+  try {
+    const res = await fetch(`${API}/reports`);
+    const data = await res.json();
+    allReports = data.reports || [];
+    updateStats(); updateMap(); renderTable(); renderRecent();
+  } catch(e) { console.error('Data pull error:', e); showToast('⚠️ Backend offline — showing demo data'); loadDemoData(); }
+}
+
+function loadDemoData() {
+  allReports = [
+    {id:'demo001',timestamp:new Date().toISOString(),latitude:10.85,longitude:76.27,total:3,severity:'HIGH',status:'Pending',detections:[],thumb:null},
+    {id:'demo002',timestamp:new Date().toISOString(),latitude:10.86,longitude:76.28,total:1,severity:'MEDIUM',status:'Work in Progress',detections:[],thumb:null},
+    {id:'demo003',timestamp:new Date().toISOString(),latitude:10.84,longitude:76.26,total:2,severity:'LOW',status:'Repaired',detections:[],thumb:null},
+  ];
+  updateStats(); if(authMap) updateMap(); renderTable(); renderRecent();
+}
+
+function updateStats() {
+  const reps = getAuthReports();
+  document.getElementById('s-total').textContent = reps.length;
+  document.getElementById('s-high').textContent  = reps.filter(r=>r.severity==='HIGH').length;
+  document.getElementById('s-med').textContent   = reps.filter(r=>r.severity==='MEDIUM').length;
+  document.getElementById('s-low').textContent   = reps.filter(r=>r.severity==='LOW').length;
+  const repEl = document.getElementById('s-repaired');
+  if (repEl) repEl.textContent = reps.filter(r=>r.status==='Repaired').length;
+
+  const cEl = document.getElementById('c-total');
+  if (cEl) {
+    cEl.textContent = allReports.length;
+    document.getElementById('c-high').textContent = allReports.filter(r=>r.severity==='HIGH').length;
+    document.getElementById('c-med').textContent = allReports.filter(r=>r.severity==='MEDIUM').length;
+    document.getElementById('c-low').textContent = allReports.filter(r=>r.severity==='LOW').length;
+    document.getElementById('c-repaired').textContent = allReports.filter(r=>r.status==='Repaired').length;
+  }
+}
+
+// RECENT REPORTS — with thumbnail
+function renderRecent() {
+  const el = document.getElementById('recent-list');
+  const reps = getAuthReports();
+  if(!reps.length){ el.innerHTML=`<div class="empty"><div class="ei">📭</div><div class="et">No reports</div></div>`; return; }
+  el.innerHTML = reps.slice(0, 10).map(r=>`
+    <div class="recent-item">
+      ${r.image_url
+        ? `<img class="ri-thumb" src="${API}${r.image_url}" alt="pothole" onclick="openModal('${API}${r.image_url}')" style="cursor:pointer;" title="Click to view">`
+        : `<div class="ri-thumb-ph">🕳️</div>`}
+      <div class="ri-info">
+        <div class="ri-title">#${r.id} — <span style="color:${markerColor(r.severity)}">${r.severity}</span></div>
+        <div class="ri-sub">${r.total} pothole(s) • ${new Date(r.timestamp).toLocaleString()}</div>
+      </div>
+      <span class="status-pill sp-${r.status.replace(/ /g,'-').replace('Work-in-Progress','WIP')}">${r.status}</span>
+    </div>`).join('');
+}
+
+function setFilter(f,btn) {
+  filterMode=f;
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('fa'));
+  btn.classList.add('fa');
+  renderTable();
+}
+
+// EXPORT TO CSV
+function exportCSV() {
+  const reps = filterMode === 'ALL' ? getAuthReports() : getAuthReports().filter(r => r.severity === filterMode);
+  if (!reps.length) { showToast('⚠️ No data to export'); return; }
+  
+  const headers = ['Report ID', 'Timestamp', 'Severity', 'Potholes', 'Latitude', 'Longitude', 'Jurisdiction', 'Status'];
+  const rows = reps.map(r => [
+    r.id, new Date(r.timestamp).toLocaleString().replace(/,/g, ''), r.severity, r.total, 
+    +(r.latitude || 0).toFixed(6), +(r.longitude || 0).toFixed(6), r.jurisdiction || 'PWD', r.status
+  ]);
+  
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `PotholeWatch_Export_${currentAuth}_${new Date().getTime()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('📥 CSV Downloaded successfully!');
+}
+
+// TABLE — with image column
+function renderTable() {
+  const tbody = document.getElementById('reports-tbody');
+  const reps = getAuthReports();
+  const list = filterMode==='ALL'?reps:reps.filter(r=>r.severity===filterMode);
+  if(!list.length){ tbody.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="ei">🔍</div><div class="et">No reports</div></div></td></tr>`; return; }
+  tbody.innerHTML = list.map(r=>`
+    <tr>
+      <td>
+        ${r.image_url
+          ? `<img class="tbl-thumb" src="${API}${r.image_url}" onclick="openModal('${API}${r.image_url}')" style="cursor:pointer;" title="Click to enlarge">`
+          : `<div class="tbl-thumb-ph">🕳️</div>`}
+      </td>
+      <td><span class="mono">#${r.id}</span></td>
+      <td style="color:var(--muted);font-size:12px;">${new Date(r.timestamp).toLocaleString()}</td>
+      <td><span class="badge badge-${r.severity}">${r.severity}</span></td>
+      <td><b>${r.total}</b></td>
+      <td class="mono">${r.latitude?r.latitude.toFixed(4)+','+r.longitude.toFixed(4):'—'}</td>
+      <td><span class="badge badge-NONE">${r.jurisdiction||'PWD'}</span></td>
+      <td><span class="status-pill sp-${r.status.replace(/ /g,'-').replace('Work-in-Progress','WIP')}">${r.status}</span></td>
+      <td>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <select class="status-sel" onchange="updateStatus('${r.id}',this.value)">
+            <option ${r.status==='Pending'?'selected':''}>Pending</option>
+            <option ${r.status==='Work in Progress'?'selected':''}>Work in Progress</option>
+            <option ${r.status==='Repaired'?'selected':''}>Repaired</option>
+          </select>
+          <button class="btn btn-outline btn-sm" style="padding:4px; font-size:11px; border-color:#fca5a5; color:#ef4444;" onclick="deleteAuthReport('${r.id}')" title="Delete Report">🗑️</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function updateStatus(id,status) {
+  try {
+    await fetch(`${API}/reports/${id}/status?status=${encodeURIComponent(status)}`,{method:'PUT'});
+    showToast(`✅ Status → "${status}"`);
+    
+    // Instantly update the local item so the UI updates
+    const rep = allReports.find(r => r.id === id);
+    if(rep) rep.status = status;
+    updateStats();
+    renderTable();
+    updateMap();
+    renderRecent();
+    
+    loadReports();
+  } catch(e) { showToast('⚠️ Could not update (demo mode)'); }
+}
+
+async function deleteAuthReport(id) {
+  if(!confirm('Are you sure you want to completely delete this fake/unwanted report?')) return;
+  try {
+      await fetch(`${API}/reports/${id}`, {method: 'DELETE'});
+      showToast('🗑️ Report securely deleted');
+      allReports = allReports.filter(r => r.id !== id);
+      updateStats();
+      renderTable();
+      renderRecent();
+      updateMap();
+  } catch(e) { showToast('⚠️ Could not delete report'); }
+}
+
+// ════ CITIZEN FILE ════
+function handleCitFile(file,type) {
+  if(!file) return;
+  citFile=file;
+  if(type==='image') {
+    const r=new FileReader();
+    r.onload=e=>{
+      document.getElementById('c-prev-img').src=e.target.result;
+      document.getElementById('c-prev-img').style.display='block';
+      let vid = document.getElementById('c-prev-vid');
+      if(vid) vid.style.display='none';
+      document.getElementById('c-preview').style.display='block';
+      document.getElementById('c-upload-zone').style.display='none';
+      // Try to auto-read GPS from EXIF (basic attempt)
+      tryReadExifLocation(file);
+    };
+    r.readAsDataURL(file);
+  } else {
+    document.getElementById('c-upload-zone').style.display='none';
+    document.getElementById('c-preview').style.display='block';
+    document.getElementById('c-prev-img').style.display='none';
+    let vid = document.getElementById('c-prev-vid');
+    if(!vid) {
+      vid = document.createElement('video');
+      vid.id = 'c-prev-vid';
+      vid.controls = true;
+      vid.style.width = '100%';
+      vid.style.maxHeight = '200px';
+      vid.style.objectFit = 'contain';
+      vid.style.display = 'block';
+      document.getElementById('c-prev-img').insertAdjacentElement('afterend', vid);
+    }
+    vid.src = URL.createObjectURL(file);
+    vid.style.display = 'block';
+    showToast('🎥 Video selected — AI will extract and process frames');
+  }
+}
+
+// Try to get GPS from image EXIF if available
+function tryReadExifLocation(file) {
+  // Only if lat/lng are empty
+  if(document.getElementById('c-lat').value) return;
+  getCitLocation(); // auto-get device GPS as fallback
+}
+
+function handleCitDrop(e) {
+  e.preventDefault();
+  document.getElementById('c-upload-zone').classList.remove('dov');
+  const f=e.dataTransfer.files[0];
+  if(f) handleCitFile(f, f.type.startsWith('video/')?'video':'image');
+}
+
+function clearCitFile() {
+  citFile=null;
+  document.getElementById('c-preview').style.display='none';
+  document.getElementById('c-upload-zone').style.display='block';
+  document.getElementById('c-result').style.display='none';
+  const vid = document.getElementById('c-prev-vid');
+  if(vid) {
+    vid.pause();
+    vid.src='';
+  }
+}
+
+function getCitLocation() {
+  if(!navigator.geolocation){ showToast('⚠️ Geolocation not supported'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('c-lat').value=pos.coords.latitude.toFixed(6);
+    document.getElementById('c-lng').value=pos.coords.longitude.toFixed(6);
+    showToast('📍 Location detected!');
+  },()=>showToast('⚠️ Could not get location'));
+}
+
+async function citizenDetect() {
+  if(!citFile){ showToast('⚠️ Please select an image or video first'); return; }
+  const btn=document.getElementById('c-detect-btn');
+  btn.disabled=true; btn.innerHTML='<div class="spin"></div> Detecting...';
+  try {
+    const fd=new FormData();
+    fd.append('file',citFile);
+    fd.append('latitude', document.getElementById('c-lat').value||'0');
+    fd.append('longitude',document.getElementById('c-lng').value||'0');
+    fd.append('confidence', '0.20');
+    const res=await fetch(`${API}/detect`,{method:'POST',body:fd});
+    if(!res.ok) throw new Error(await res.text());
+    const data=await res.json();
+    if(data.error) throw new Error(data.error);
+    showCitResult(data);
+    // Save with backend image URL if available, else local preview
+    const imgSrc = data.image_url ? `${API}${data.image_url}` : (document.getElementById('c-prev-img').src || '');
+    saveMyReport(data, imgSrc);
+    
+    if(data.total > 0 && data.report_id) {
+       allReports.unshift({
+         id: data.report_id, timestamp: new Date().toISOString(),
+         latitude: parseFloat(document.getElementById('c-lat').value||0),
+         longitude: parseFloat(document.getElementById('c-lng').value||0),
+         total: data.total, severity: data.severity||'NONE',
+         jurisdiction: data.jurisdiction||'PWD', status: 'Pending',
+         image_url: data.image_url
+       });
+       updateStats();
+       renderRecent();
+    }
+    
+    showToast(`✅ ${data.total} pothole(s) detected!`);
+  } catch(e) {
+    console.error(e);
+    showToast('⚠️ Backend offline — showing demo result');
+    showCitResult({total:2,severity:'HIGH',report_id:'demo01',saved_to_db:false});
+  }
+  btn.disabled=false; btn.innerHTML='🔍 Submit & Detect with AI';
+}
+
+function showCitResult(data) {
+  const box=document.getElementById('c-result');
+  const head=document.getElementById('c-result-head');
+  const rows=document.getElementById('c-result-rows');
+  const c=data.severity==='HIGH'?'var(--high)':data.severity==='MEDIUM'?'var(--med)':data.severity==='LOW'?'var(--low)':'var(--muted)';
+  box.style.display='block';
+  head.style.background=data.total?c+'20':'#f3f4f6';
+  head.style.color=data.total?c:'var(--muted)';
+  head.innerHTML=data.total?`✅ ${data.total} Pothole(s) Detected!`:`✅ Road looks clear!`;
+  rows.innerHTML=[
+    ['Potholes Found',data.total],
+    ['Overall Severity',data.severity||'NONE'],
+    ['Report ID',data.report_id?'#'+data.report_id:'—'],
+    ['Saved to Firebase',data.saved_to_db?'Yes ✅':'No (no pothole found)'],
+  ].map(([k,v])=>`<div class="cr-row"><span class="cr-key">${k}</span><span class="cr-val">${v}</span></div>`).join('');
+}
+
+// ════ WEBCAM ════
+async function startWebcam() {
+  try {
+    // Prime Audio Context during User Gesture to bypass browser autoplay blocking
+    if (!audioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) audioCtx = new AudioContext();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (window.speechSynthesis) window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); // prime synth
+
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(pos => {
+        currentLat = pos.coords.latitude.toFixed(6);
+        currentLng = pos.coords.longitude.toFixed(6);
+      }, () => {}, {enableHighAccuracy: true});
+    }
+    webcamStream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+    document.getElementById('webcam-feed').srcObject = webcamStream;
+    document.getElementById('webcam-container').style.display='block';
+    document.getElementById('webcam-placeholder').style.display='none';
+    document.getElementById('start-cam-btn').style.display='none';
+    document.getElementById('stop-cam-btn').style.display='flex';
+    showToast('📹 Camera started — sending frames to AI...');
+    webcamInterval = setInterval(captureAndDetect, 4000);
+  } catch(e) { showToast('❌ Camera access denied'); }
+}
+
+function stopWebcam() {
+  if(webcamStream) { webcamStream.getTracks().forEach(t=>t.stop()); webcamStream=null; }
+  if(webcamInterval) { clearInterval(webcamInterval); webcamInterval=null; }
+  document.getElementById('webcam-container').style.display='none';
+  document.getElementById('webcam-placeholder').style.display='flex';
+  document.getElementById('start-cam-btn').style.display='flex';
+  document.getElementById('stop-cam-btn').style.display='none';
+}
+
+async function captureAndDetect() {
+  const video=document.getElementById('webcam-feed');
+  const canvas=document.getElementById('webcam-canvas');
+  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  canvas.getContext('2d').drawImage(video,0,0);
+  canvas.toBlob(async blob=>{
+    try {
+      const fd=new FormData(); fd.append('file',blob,'frame.jpg');
+      fd.append('latitude', currentLat); fd.append('longitude', currentLng);
+      fd.append('confidence', '0.75');
+      const res=await fetch(`${API}/detect`,{method:'POST',body:fd});
+      const data=await res.json();
+      const lr=document.getElementById('live-result');
+      if(data.total>0) {
+        // Draw Red Bounding Boxes
+        const overlay = document.getElementById('live-overlay-canvas');
+        if (overlay) {
+          overlay.width = overlay.clientWidth; overlay.height = overlay.clientHeight;
+          const ctx = overlay.getContext('2d');
+          const scaleX = overlay.width / document.getElementById('webcam-canvas').width;
+          const scaleY = overlay.height / document.getElementById('webcam-canvas').height;
+          data.detections.forEach(d => {
+             const b = d.box;
+             ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3;
+             ctx.strokeRect(b.x1*scaleX, b.y1*scaleY, (b.x2-b.x1)*scaleX, (b.y2-b.y1)*scaleY);
+             ctx.fillStyle = '#ef4444'; ctx.font = 'bold 12px "DM Sans"';
+             ctx.fillText(`POTHOLE DETECTED - SEVERITY: ${d.severity}`, Math.max(0, b.x1*scaleX), Math.max(12, (b.y1*scaleY) - 8));
+          });
+          
+          const topAlert = document.getElementById('top-alert-panel');
+          if (topAlert) {
+             const sevColors = {'HIGH':'#ef4444', 'MEDIUM':'#f59e0b', 'LOW':'#22c55e'};
+             topAlert.style.background = sevColors[data.severity] || '#ef4444';
+             topAlert.textContent = `⚠️ ${data.severity} SEVERITY POTHOLE DETECTED`;
+             topAlert.style.top = '16px';
+          }
+          
+          setTimeout(() => {
+             ctx.clearRect(0,0,overlay.width,overlay.height);
+             if (topAlert) topAlert.style.top = '-60px';
+          }, 3500);
+        }
+
+        // Auto-save to My Reports with high-res image
+        const imgSrc = data.image_url ? `${API}${data.image_url}` : '';
+        document.getElementById('c-lat').value = currentLat !== '0' ? currentLat : '';
+        document.getElementById('c-lng').value = currentLng !== '0' ? currentLng : '';
+        saveMyReport(data, imgSrc);
+
+        // Instantly update the 5 box global stats
+        if(data.report_id) {
+           allReports.unshift({
+             id: data.report_id, timestamp: new Date().toISOString(),
+             latitude: parseFloat(currentLat), longitude: parseFloat(currentLng),
+             total: data.total, severity: data.severity||'NONE',
+             jurisdiction: data.jurisdiction||'PWD', status: 'Pending',
+             image_url: data.image_url
+           });
+           updateStats();
+           renderRecent();
+        }
+        
+        // Update Auto-Capture Verification UI
+        document.getElementById('capture-verification').style.display = 'flex';
+        document.getElementById('capture-verification-placeholder').style.display = 'none';
+        document.getElementById('cv-thumb').src = imgSrc;
+        document.getElementById('cv-id').textContent = data.report_id;
+        
+        playAudioWarning(data.severity);
+      } else {
+        const overlay = document.getElementById('live-overlay-canvas');
+        if(overlay) overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);
+        lr.innerHTML=`<div style="background:var(--low-bg);border-radius:10px;padding:12px 16px;font-size:13px;font-weight:600;color:var(--low);">✅ No potholes detected in this frame</div>`;
+      }
+    } catch(e) {}
+  },'image/jpeg',0.8);
+}
+
+// ════ AUDIO WARNING SYSTEM ════
+function beep(freq, duration) {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+    setTimeout(() => { osc.stop(); }, duration * 1000 + 100);
+  } catch(e) {}
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  const msg = new SpeechSynthesisUtterance(text);
+  msg.rate = 1.1;
+  window.speechSynthesis.speak(msg);
+}
+
+function playAudioWarning(severity) {
+  if (Date.now() - lastAudioTime < 6000) return; // Wait 6s between warnings
+  lastAudioTime = Date.now();
+  
+  if (severity === 'HIGH') {
+    beep(880, 0.5); 
+    setTimeout(() => speak("Danger! High severity pothole detected."), 600);
+  } else if (severity === 'MEDIUM') {
+    beep(660, 0.4);
+    setTimeout(() => speak("Warning! Medium severity pothole ahead."), 500);
+  } else {
+    beep(440, 0.2);
+    setTimeout(() => speak("Notice. Minor pothole detected."), 300);
+  }
+}
+
+// ════ MY REPORTS — with image ════
+function saveMyReport(data, imgSrc) {
+  const reports = JSON.parse(localStorage.getItem('my_reports_v2')||'[]');
+  reports.unshift({
+    ...data,
+    timestamp: new Date().toISOString(),
+    imgSrc: imgSrc || '',
+    lat: document.getElementById('c-lat').value || '',
+    lng: document.getElementById('c-lng').value || '',
+  });
+  localStorage.setItem('my_reports_v2', JSON.stringify(reports.slice(0,20)));
+}
+
+function loadMyReports() {
+  const reports = JSON.parse(localStorage.getItem('my_reports_v2')||'[]');
+  const el = document.getElementById('my-reports-list');
+  if(!reports.length){
+    el.innerHTML=`<div class="empty"><div class="ei">📭</div><div class="et">No reports yet</div><div>Submit your first report!</div></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="reports-grid">` + reports.map((r, i)=>`
+    <div class="my-report-card">
+      ${r.imgSrc
+        ? `<img class="mrc-img" src="${r.imgSrc}" alt="Pothole image" onclick="openModal('${r.imgSrc}')" style="cursor:pointer;" title="Click to enlarge">`
+        : `<div class="mrc-img-ph">🖼️</div>`}
+      <div class="mrc-body-pad">
+        <div class="mrc-head">
+          <span class="mrc-id">#${r.report_id||'—'}</span>
+          <span class="badge badge-${r.severity||'NONE'}">${r.severity||'NONE'}</span>
+        </div>
+        <div class="mrc-detail">
+          <span class="mrc-chip">🕳️ ${r.total} pothole(s)</span>
+          ${r.lat?`<span class="mrc-chip">📍 ${parseFloat(r.lat).toFixed(3)}, ${parseFloat(r.lng).toFixed(3)}</span>`:''}
+        </div>
+        <div class="mrc-meta" style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+          <span>${new Date(r.timestamp).toLocaleString()}</span>
+          <button class="btn btn-outline btn-sm" style="padding:4px 10px; font-size:11px; border-color:#fca5a5; color:#ef4444;" onclick="deleteMyReport(${i})">🗑️ Delete</button>
+        </div>
+      </div>
+    </div>`).join('') + `</div>`;
+}
+
+async function deleteMyReport(idx) {
+  if(!confirm('Are you sure you want to completely delete this report? It will also be removed from the main Authority map.')) return;
+  let reports = JSON.parse(localStorage.getItem('my_reports_v2')||'[]');
+  const removedId = reports[idx].report_id;
+  
+  if (removedId) {
+      try {
+          await fetch(`${API}/reports/${removedId}`, {method: 'DELETE'});
+      } catch(e) { console.error('Delete API error:', e); }
+      // Instantly remove from your global stats too
+      allReports = allReports.filter(r => r.id !== removedId);
+      updateStats();
+      renderRecent();
+  }
+  
+  reports.splice(idx, 1);
+  localStorage.setItem('my_reports_v2', JSON.stringify(reports));
+  loadMyReports();
+  showToast('🗑️ Report permanently deleted');
+}
+
+// ════ COMPLAINT ════
+function submitComplaint() {
+  const msg = document.getElementById('comp-msg').value.trim();
+  if(!msg){ showToast('⚠️ Please write your complaint'); return; }
+  const complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+  complaints.unshift({
+    type: document.getElementById('comp-type').value,
+    reportId: document.getElementById('comp-reportid').value,
+    msg, timestamp: new Date().toISOString()
+  });
+  localStorage.setItem('complaints_v2', JSON.stringify(complaints));
+  document.getElementById('comp-msg').value='';
+  document.getElementById('comp-reportid').value='';
+  showToast('✅ Complaint submitted!');
+  loadMyComplaints();
+}
+
+function getReportThumbHtml(repId) {
+  if(!repId) return '';
+  const r = allReports.find(x => x.id === repId.replace('#',''));
+  if (r && r.image_url) {
+    return `<div style="flex-shrink:0;margin-right:12px;"><img src="${API}${r.image_url}" style="width:70px;height:52px;object-fit:cover;border-radius:8px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.1);" onclick="openModal('${API}${r.image_url}')"></div>`;
+  }
+  return '';
+}
+
+function loadMyComplaints() {
+  const complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+  const el = document.getElementById('my-complaints-preview');
+  if(!complaints.length){ el.innerHTML=''; return; }
+  el.innerHTML = `<div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--muted);">📋 Your Submitted Complaints</div>` +
+    complaints.slice(0,5).map(c=>`
+    <div class="complaint-card" style="display:flex;align-items:center;">
+      ${getReportThumbHtml(c.reportId)}
+      <div style="flex:1;">
+        <div class="cc-head" style="margin-bottom:4px;">
+          <span style="font-weight:700;font-size:13px;color:var(--text);">${c.type}</span>
+          <span class="cc-meta">${new Date(c.timestamp).toLocaleString()}</span>
+        </div>
+        ${c.reportId?`<div class="cc-meta" style="margin-bottom:6px;color:var(--accent);font-weight:600;">Report: <span style="font-family:'DM Mono',monospace;">#${c.reportId.replace('#','')}</span></div>`:''}
+        <div class="cc-msg" style="color:var(--muted);font-weight:500;">${c.msg}</div>
+      </div>
+    </div>`).join('');
+}
+
+// Authority complaints view
+function loadAuthComplaints() {
+  const complaints = JSON.parse(localStorage.getItem('complaints')||'[]');
+  const el = document.getElementById('auth-complaints-list');
+  if(!complaints.length){ el.innerHTML=`<div class="empty"><div class="ei">📭</div><div class="et">No complaints yet</div></div>`; return; }
+  el.innerHTML = complaints.map(c=>`
+    <div class="complaint-card" style="display:flex;align-items:center;">
+      ${getReportThumbHtml(c.reportId)}
+      <div style="flex:1;">
+        <div class="cc-head" style="margin-bottom:4px;">
+          <span style="font-weight:700;font-size:13px;color:var(--text);">${c.type}</span>
+          <span class="cc-meta">${new Date(c.timestamp).toLocaleString()}</span>
+        </div>
+        ${c.reportId?`<div class="cc-meta" style="margin-bottom:6px;color:var(--accent);font-weight:600;">Report: <span style="font-family:'DM Mono',monospace;">#${c.reportId.replace('#','')}</span></div>`:''}
+        <div class="cc-msg" style="color:var(--muted);font-weight:500;">${c.msg}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ════ RATINGS ════
+function setStar(n) {
+  selectedStar=n;
+  const labels=['','Poor 😞','Fair 😐','Good 🙂','Very Good 😊','Excellent! 🤩'];
+  document.getElementById('star-label').textContent = labels[n];
+  document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('active',i<n));
+}
+
+function submitRating() {
+  if(!selectedStar){ showToast('⚠️ Please select a star rating'); return; }
+  const ratings = JSON.parse(localStorage.getItem('ratings')||'[]');
+  ratings.unshift({
+    stars: selectedStar,
+    comment: document.getElementById('rate-comment').value,
+    timestamp: new Date().toISOString()
+  });
+  localStorage.setItem('ratings', JSON.stringify(ratings));
+  document.getElementById('rate-comment').value='';
+  setStar(0); selectedStar=0;
+  document.getElementById('star-label').textContent='Thank you for your feedback!';
+  showToast('⭐ Rating submitted!');
+}
+
+function loadRatings() {
+  const ratings = JSON.parse(localStorage.getItem('ratings')||'[]');
+  const avg = ratings.length ? (ratings.reduce((a,r)=>a+r.stars,0)/ratings.length).toFixed(1) : '—';
+  document.getElementById('avg-rating').textContent = avg;
+  document.getElementById('total-ratings').textContent = ratings.length;
+  document.getElementById('five-star').textContent = ratings.filter(r=>r.stars===5).length;
+  const el = document.getElementById('ratings-list');
+  if(!ratings.length){ el.innerHTML=`<div class="empty"><div class="ei">⭐</div><div class="et">No ratings yet</div></div>`; return; }
+  el.innerHTML = ratings.map(r=>`
+    <div class="complaint-card">
+      <div class="cc-head">
+        <span>${'⭐'.repeat(r.stars)}</span>
+        <span class="cc-meta">${new Date(r.timestamp).toLocaleString()}</span>
+      </div>
+      ${r.comment?`<div class="cc-msg">${r.comment}</div>`:''}
+    </div>`).join('');
+}
+
+// ════ TOAST ════
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+train: C:/Arjun/STUDY/mini project code/pothole-detection/dataset_merged/train/images
+val:   C:/Arjun/STUDY/mini project code/pothole-detection/dataset_merged/valid/images
+test:  C:/Arjun/STUDY/mini project code/pothole-detection/dataset_merged/test/images
+
+nc: 1
+names: ['pothole']
