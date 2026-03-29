@@ -1,0 +1,35 @@
+# Firebase Credentials
+firebase_key.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Model Files
+*.pt
+*.pth
+runs/
+
+# Flutter (pothole_app)
+pothole_app/.dart_tool/
+pothole_app/.flutter-plugins
+pothole_app/.flutter-plugins-dependencies
+pothole_app/.packages
+pothole_app/build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
