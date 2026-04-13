@@ -90,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final u = _userCtrl.text.trim();
     final p = _passCtrl.text.trim();
 
-    if (_role == 'authority' && u == 'admin' && p == 'pwd123') {
+    if (_role == 'authority' && u == 'pwd' && p == 'pwd123') {
       if (!mounted) return;
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const AuthorityScreen()));
@@ -232,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 12)),
                           SizedBox(height: 6),
-                          Text('Authority: admin / pwd123',
+                          Text('Authority: pwd / pwd123',
                               style: TextStyle(
                                   fontSize: 12, fontFamily: 'monospace')),
                           Text('Citizen:   citizen / user123',

@@ -9,7 +9,7 @@
 ================================================
 """
 
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import firebase_admin
@@ -20,6 +20,7 @@ import numpy as np
 import uuid
 import os
 import base64
+import json
 from datetime import datetime
 
 # ─────────────────────────────────────────────
@@ -39,9 +40,43 @@ from fastapi.staticfiles import StaticFiles
 app.mount("/images", StaticFiles(directory="images"), name="images")
 
 import urllib.request
-import json
 import asyncio
 
+# ─────────────────────────────────────────────
+# LOCAL JSON PERSISTENCE
+# ─────────────────────────────────────────────
+LOCAL_JSON_PATH = "pothole_reports.json"
+
+def load_local_reports():
+    """Load reports from local JSON file"""
+    try:
+        if os.path.exists(LOCAL_JSON_PATH):
+            with open(LOCAL_JSON_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+    except Exception as e:
+        print(f"⚠️ Error loading local reports: {e}")
+    return []
+
+def save_local_reports(reports):
+    """Save reports to local JSON file"""
+    try:
+        with open(LOCAL_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(reports, f, indent=2, default=str)
+    except Exception as e:
+        print(f"⚠️ Error saving local reports: {e}")
+
+def add_local_report(report):
+    """Add a single report to local JSON"""
+    reports = load_local_reports()
+    # Avoid duplicates
+    reports = [r for r in reports if r.get("id") != report.get("id")]
+    reports.insert(0, report)
+    save_local_reports(reports)
+
+# ─────────────────────────────────────────────
+# GEOCODING
+# ─────────────────────────────────────────────
 def get_jurisdiction(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
@@ -67,6 +102,11 @@ cred = credentials.Certificate("firebase_key.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 print("✅ Firebase connected!")
+
+# Load persisted reports into memory cache on startup
+LOCAL_REPORTS_CACHE = load_local_reports()
+LAST_CACHE_TIME = 0
+print(f"✅ Loaded {len(LOCAL_REPORTS_CACHE)} reports from local backup")
 
 # ─────────────────────────────────────────────
 # SEVERITY CLASSIFICATION
@@ -94,15 +134,74 @@ def root():
         return {"status": "running", "project": "Pothole Detection - Group 4"}
 
 # ─────────────────────────────────────────────
-# MAIN: DETECT POTHOLES FROM IMAGE
+# FAST DETECT — For live webcam (no geocoding, no Firebase)
 # ─────────────────────────────────────────────
-@app.post("/detect")
+@app.post("/detect-fast")
+async def detect_fast(
+    file: UploadFile = File(...),
+    confidence: float = Form(0.50),
+):
+    """Lightweight detection for live webcam — returns detections only, no DB save"""
+    try:
+        contents = await file.read()
+        np_arr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if image is None:
+            return JSONResponse({"error": "Invalid image"}, status_code=400)
+
+        # Use smaller input size for speed
+        img_h, img_w = image.shape[:2]
+        image_area = img_h * img_w
+        results = model(image, verbose=False, imgsz=320)
+        predictions = []
+
+        for result in results:
+            if result.boxes is None:
+                continue
+            for box in result.boxes:
+                conf = float(box.conf[0])
+                if conf < confidence:
+                    continue
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                w_pad = int((x2 - x1) * 0.20)
+                h_pad = int((y2 - y1) * 0.20)
+                x1 = max(0, x1 - w_pad)
+                y1 = max(0, y1 - h_pad)
+                x2 = min(img_w, x2 + w_pad)
+                y2 = min(img_h, y2 + h_pad)
+                box_area = (x2 - x1) * (y2 - y1)
+                severity = get_severity(box_area, image_area)
+                predictions.append({
+                    "severity": severity,
+                    "confidence": round(conf * 100, 1),
+                    "box": {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
+                })
+
+        overall = "NONE"
+        if predictions:
+            if any(p["severity"] == "HIGH" for p in predictions): overall = "HIGH"
+            elif any(p["severity"] == "MEDIUM" for p in predictions): overall = "MEDIUM"
+            else: overall = "LOW"
+
+        return {
+            "success": True,
+            "total": len(predictions),
+            "severity": overall,
+            "detections": predictions,
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+# ─────────────────────────────────────────────
+# MAIN: DETECT POTHOLES FROM IMAGE (full pipeline)
+# ─────────────────────────────────────────────
 @app.post("/detect")
 async def detect_pothole(
     file: UploadFile = File(...),
     latitude: float  = Form(0.0),
     longitude: float = Form(0.0),
     confidence: float = Form(0.20),
+    reported_by: str = Form("citizen"),
 ):
     try:
         jurisdiction = await asyncio.to_thread(get_jurisdiction, latitude, longitude)
@@ -248,7 +347,7 @@ async def detect_pothole(
         cv2.imwrite(image_path, image)
         image_url = f"/images/uploads/{report_id}.jpg"
 
-        # Save to Firebase
+        # Save to Firebase + Local
         report = {
             "id":           report_id,
             "timestamp":    datetime.now().isoformat(),
@@ -259,7 +358,8 @@ async def detect_pothole(
             "detections":   predictions,
             "status":       "Pending",
             "jurisdiction": jurisdiction,
-            "image_url":    image_url,   # ← Full high-res image URL stored for dashboard
+            "image_url":    image_url,
+            "reported_by":  reported_by,
         }
 
         if predictions:
@@ -269,9 +369,11 @@ async def detect_pothole(
                 print("Firebase Write Warning (Quota):", e)
             print(f"  ✅ Saved report {report_id} — {overall} — {len(predictions)} pothole(s)")
             
-            # Push into memory fallback cache for offline resiliency
-            if "LOCAL_REPORTS_CACHE" in globals():
-                LOCAL_REPORTS_CACHE.insert(0, report)
+            # Save to local JSON backup
+            add_local_report(report)
+            
+            # Push into memory cache
+            LOCAL_REPORTS_CACHE.insert(0, report)
 
         return {
             "success":    True,
@@ -288,11 +390,64 @@ async def detect_pothole(
         return JSONResponse({"error": str(e)}, status_code=500)
 
 # ─────────────────────────────────────────────
+# SAVE LIVE DETECTION — Called when live webcam finds a pothole
+# ─────────────────────────────────────────────
+@app.post("/save-live-report")
+async def save_live_report(
+    file: UploadFile = File(...),
+    latitude: float = Form(0.0),
+    longitude: float = Form(0.0),
+    severity: str = Form("MEDIUM"),
+    total: int = Form(1),
+    reported_by: str = Form("citizen"),
+):
+    """Save a pothole detected during live webcam — runs geocoding + Firebase in background"""
+    try:
+        contents = await file.read()
+        np_arr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if image is None:
+            return JSONResponse({"error": "Invalid image"}, status_code=400)
+
+        jurisdiction = await asyncio.to_thread(get_jurisdiction, latitude, longitude)
+
+        report_id = str(uuid.uuid4())[:8]
+        image_path = f"images/uploads/{report_id}.jpg"
+        cv2.imwrite(image_path, image)
+        image_url = f"/images/uploads/{report_id}.jpg"
+
+        report = {
+            "id": report_id,
+            "timestamp": datetime.now().isoformat(),
+            "latitude": latitude,
+            "longitude": longitude,
+            "total": total,
+            "severity": severity,
+            "detections": [],
+            "status": "Pending",
+            "jurisdiction": jurisdiction,
+            "image_url": image_url,
+            "reported_by": reported_by,
+        }
+
+        try:
+            db.collection("potholes_v2").document(report_id).set(report)
+        except Exception as e:
+            print("Firebase Write Warning:", e)
+
+        add_local_report(report)
+        LOCAL_REPORTS_CACHE.insert(0, report)
+
+        print(f"  ✅ Live report saved {report_id} — {severity}")
+        return {"success": True, "report_id": report_id, "image_url": image_url, "jurisdiction": jurisdiction}
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ─────────────────────────────────────────────
 # GET ALL REPORTS (for dashboard)
 # ─────────────────────────────────────────────
-LOCAL_REPORTS_CACHE = []
-LAST_CACHE_TIME = 0
-
 @app.get("/reports")
 def get_reports():
     global LOCAL_REPORTS_CACHE, LAST_CACHE_TIME
@@ -306,17 +461,45 @@ def get_reports():
         reports = [doc.to_dict() for doc in docs]
         reports.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
+        # Merge with local reports (local may have reports Firebase missed due to quota)
+        local_reports = load_local_reports()
+        existing_ids = {r.get("id") for r in reports}
+        for lr in local_reports:
+            if lr.get("id") not in existing_ids:
+                reports.append(lr)
+        reports.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
         LOCAL_REPORTS_CACHE = reports
         LAST_CACHE_TIME = now
+        
+        # Also save merged data to local file
+        save_local_reports(reports)
+        
         return {"success": True, "count": len(reports), "reports": reports}
     except Exception as e:
         print("Firebase Quota/Network Warning:", e)
+        # Fall back to local JSON
+        if not LOCAL_REPORTS_CACHE:
+            LOCAL_REPORTS_CACHE = load_local_reports()
         if not LOCAL_REPORTS_CACHE:
             LOCAL_REPORTS_CACHE = [
-                {"id": "demo001", "timestamp": datetime.now().isoformat(), "latitude": 9.45, "longitude": 76.33, "total": 3, "severity": "HIGH", "jurisdiction": "PWD", "status": "Pending", "image_url": ""},
-                {"id": "demo002", "timestamp": datetime.now().isoformat(), "latitude": 9.46, "longitude": 76.35, "total": 1, "severity": "LOW", "jurisdiction": "NHAI", "status": "Work in Progress", "image_url": ""}
+                {"id": "demo001", "timestamp": datetime.now().isoformat(), "latitude": 9.45, "longitude": 76.33, "total": 3, "severity": "HIGH", "jurisdiction": "PWD", "status": "Pending", "image_url": "", "reported_by": "citizen"},
+                {"id": "demo002", "timestamp": datetime.now().isoformat(), "latitude": 9.46, "longitude": 76.35, "total": 1, "severity": "LOW", "jurisdiction": "NHAI", "status": "Work in Progress", "image_url": "", "reported_by": "citizen"}
             ]
         return {"success": True, "count": len(LOCAL_REPORTS_CACHE), "reports": LOCAL_REPORTS_CACHE, "cached": True, "quota_warning": True}
+
+# ─────────────────────────────────────────────
+# GET MY REPORTS (for citizen — filtered by user)
+# ─────────────────────────────────────────────
+@app.get("/reports/mine")
+def get_my_reports(user: str = Query("citizen")):
+    """Get reports filtered by reported_by field"""
+    try:
+        all_reps = LOCAL_REPORTS_CACHE if LOCAL_REPORTS_CACHE else load_local_reports()
+        my_reps = [r for r in all_reps if r.get("reported_by", "citizen") == user]
+        return {"success": True, "count": len(my_reps), "reports": my_reps}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # ─────────────────────────────────────────────
 # UPDATE REPORT STATUS
@@ -338,6 +521,9 @@ def update_status(report_id: str, status: str):
             if r.get("id") == report_id:
                 r["status"] = status
                 break
+        
+        # Update local JSON too
+        save_local_reports(LOCAL_REPORTS_CACHE)
                 
         return {"success": True, "report_id": report_id, "status": status}
     except Exception as e:
@@ -351,9 +537,78 @@ def delete_report(report_id: str):
     except Exception as e:
         print("Firebase Delete Warning (Quota):", e)
         
-    # Always remove from memory cache so standard users no longer see it
     LOCAL_REPORTS_CACHE = [r for r in LOCAL_REPORTS_CACHE if r.get("id") != report_id]
+    save_local_reports(LOCAL_REPORTS_CACHE)
     return {"success": True, "deleted_id": report_id}
+
+# ─────────────────────────────────────────────
+# COMPLAINTS & RATINGS (Firebase-backed)
+# ─────────────────────────────────────────────
+@app.post("/complaints")
+async def submit_complaint(
+    type: str = Form(...),
+    report_id: str = Form(""),
+    message: str = Form(...),
+    submitted_by: str = Form("citizen"),
+):
+    try:
+        complaint = {
+            "id": str(uuid.uuid4())[:8],
+            "type": type,
+            "reportId": report_id,
+            "msg": message,
+            "submitted_by": submitted_by,
+            "timestamp": datetime.now().isoformat(),
+        }
+        try:
+            db.collection("complaints").document(complaint["id"]).set(complaint)
+        except Exception as e:
+            print("Firebase Complaint Warning:", e)
+        return {"success": True, "complaint": complaint}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/complaints")
+def get_complaints():
+    try:
+        docs = db.collection("complaints").stream()
+        complaints = [doc.to_dict() for doc in docs]
+        complaints.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return {"success": True, "complaints": complaints}
+    except Exception as e:
+        return {"success": True, "complaints": []}
+
+@app.post("/ratings")
+async def submit_rating(
+    stars: int = Form(...),
+    comment: str = Form(""),
+    submitted_by: str = Form("citizen"),
+):
+    try:
+        rating = {
+            "id": str(uuid.uuid4())[:8],
+            "stars": stars,
+            "comment": comment,
+            "submitted_by": submitted_by,
+            "timestamp": datetime.now().isoformat(),
+        }
+        try:
+            db.collection("ratings").document(rating["id"]).set(rating)
+        except Exception as e:
+            print("Firebase Rating Warning:", e)
+        return {"success": True, "rating": rating}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/ratings")
+def get_ratings():
+    try:
+        docs = db.collection("ratings").stream()
+        ratings = [doc.to_dict() for doc in docs]
+        ratings.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return {"success": True, "ratings": ratings}
+    except Exception as e:
+        return {"success": True, "ratings": []}
 
 
 # ─────────────────────────────────────────────
