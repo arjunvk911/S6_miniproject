@@ -435,40 +435,7 @@ select.status-sel{padding:5px 9px;border:1.5px solid var(--border);border-radius
       </div>
     </div>
 
-      <!-- REAL-TIME SYSTEM IMPACT (Authority) -->
-      <div style="margin-top:4px;margin-bottom:24px;">
-        <div style="font-size:16px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;font-family:'Outfit',sans-serif;">
-          🌍 Real-Time System Impact
-          <span style="font-size:12px;font-weight:500;color:var(--muted);background:var(--accent-bg);padding:4px 10px;border-radius:20px;">Live from Firebase</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;">
-          <div class="stat-card" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:none;">
-            <div class="stat-label">Total Reports</div>
-            <div class="stat-value sv-total" id="ai-total" style="font-size:32px;">0</div>
-            <div class="stat-sub">All detections</div>
-          </div>
-          <div class="stat-card" style="background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:none;">
-            <div class="stat-label">🔴 HIGH</div>
-            <div class="stat-value sv-high" id="ai-high" style="font-size:32px;">0</div>
-            <div class="stat-sub">Urgent repair</div>
-          </div>
-          <div class="stat-card" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:none;">
-            <div class="stat-label">🟠 MEDIUM</div>
-            <div class="stat-value sv-med" id="ai-med" style="font-size:32px;">0</div>
-            <div class="stat-sub">Scheduled maint.</div>
-          </div>
-          <div class="stat-card" style="background:linear-gradient(135deg,#f0fdf4,#d1fae5);border:none;">
-            <div class="stat-label">🟢 LOW</div>
-            <div class="stat-value sv-low" id="ai-low" style="font-size:32px;">0</div>
-            <div class="stat-sub">Monitor only</div>
-          </div>
-          <div class="stat-card" style="background:linear-gradient(135deg,#f0fdf4,#bbf7d0);border:none;">
-            <div class="stat-label">✅ REPAIRED</div>
-            <div class="stat-value sv-repaired" id="ai-repaired" style="font-size:32px;">0</div>
-            <div class="stat-sub">Completed work</div>
-          </div>
-        </div>
-      </div>
+
 
     <!-- ALL REPORTS TABLE WITH IMAGE COLUMN -->
     <div id="auth-reports" class="page-section">
@@ -846,18 +813,7 @@ select.status-sel{padding:5px 9px;border:1.5px solid var(--border);border-radius
           </div>
         </div>
 
-        <!-- System Impact -->
-        <div class="card">
-          <div class="card-head"><span class="card-title">🌍 PotholeWatch Impact</span></div>
-          <div class="card-body" style="text-align:center;">
-            <p style="font-size:15px;color:var(--muted);max-width:600px;margin:0 auto 20px;">Every report you submit helps repair roads faster. Our AI system automatically prioritizes HIGH severity potholes and notifies the nearest road authority within seconds.</p>
-            <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-              <div style="background:var(--accent-bg);padding:14px 24px;border-radius:12px;"><div style="font-size:24px;font-weight:800;color:var(--accent);font-family:'Outfit',sans-serif;" id="awareness-total">—</div><div style="font-size:11px;font-weight:600;color:var(--muted);">Reports Filed</div></div>
-              <div style="background:var(--low-bg);padding:14px 24px;border-radius:12px;"><div style="font-size:24px;font-weight:800;color:var(--low);font-family:'Outfit',sans-serif;" id="awareness-repaired">—</div><div style="font-size:11px;font-weight:600;color:var(--muted);">Roads Repaired</div></div>
-              <div style="background:var(--high-bg);padding:14px 24px;border-radius:12px;"><div style="font-size:24px;font-weight:800;color:var(--high);font-family:'Outfit',sans-serif;" id="awareness-urgent">—</div><div style="font-size:11px;font-weight:600;color:var(--muted);">Urgent (HIGH)</div></div>
-            </div>
-          </div>
-        </div>
+
       </div>
     </div>
 
@@ -894,7 +850,9 @@ let audioCtx = null;
 let lastFrameData = null;
 
 function getAuthReports() {
-  return allReports.filter(r => (r.jurisdiction || 'PWD') === currentAuth);
+  // Show ALL reports — both PWD and NHAI visible to authority
+  // Jurisdiction is displayed as a badge on each report row
+  return allReports;
 }
 
 // ════ PERSISTENT CACHE ════
@@ -1609,16 +1567,27 @@ async function deleteMyReport(idx) {
 }
 
 // ════ COMPLAINT ════
-function submitComplaint() {
+async function submitComplaint() {
   const msg = document.getElementById('comp-msg').value.trim();
   if(!msg){ showToast('⚠️ Please write your complaint'); return; }
-  const complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
-  complaints.unshift({
-    type: document.getElementById('comp-type').value,
-    reportId: document.getElementById('comp-reportid').value,
-    msg, timestamp: new Date().toISOString()
-  });
-  localStorage.setItem('complaints_v2', JSON.stringify(complaints));
+  const type = document.getElementById('comp-type').value;
+  const reportId = document.getElementById('comp-reportid').value;
+  const newC = { type, reportId, msg, timestamp: new Date().toISOString() };
+
+  // Save to localStorage immediately (instant UI)
+  const local = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+  local.unshift(newC);
+  localStorage.setItem('complaints_v2', JSON.stringify(local));
+
+  // Also POST to Firebase via backend
+  try {
+    const fd = new FormData();
+    fd.append('type', type);
+    fd.append('report_id', reportId);
+    fd.append('message', msg);
+    await fetch(`${API}/complaints`, { method: 'POST', body: fd });
+  } catch(e) { console.warn('Complaint sync failed, stored locally:', e); }
+
   document.getElementById('comp-msg').value='';
   document.getElementById('comp-reportid').value='';
   showToast('✅ Complaint submitted!');
@@ -1634,40 +1603,57 @@ function getReportThumbHtml(repId) {
   return '';
 }
 
-function loadMyComplaints() {
-  const complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+async function loadMyComplaints() {
   const el = document.getElementById('my-complaints-preview');
+  let complaints = [];
+  try {
+    const res = await fetch(`${API}/complaints`);
+    const data = await res.json();
+    complaints = data.complaints || [];
+    localStorage.setItem('complaints_v2', JSON.stringify(complaints));
+  } catch(e) {
+    complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+  }
   if(!complaints.length){ el.innerHTML=''; return; }
   el.innerHTML = `<div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--muted);">📋 Your Submitted Complaints</div>` +
     complaints.slice(0,5).map(c=>`
     <div class="complaint-card" style="display:flex;align-items:center;">
-      ${getReportThumbHtml(c.reportId)}
+      ${getReportThumbHtml(c.reportId||c.report_id)}
       <div style="flex:1;">
         <div class="cc-head" style="margin-bottom:4px;">
           <span style="font-weight:700;font-size:13px;color:var(--text);">${c.type}</span>
           <span class="cc-meta">${new Date(c.timestamp).toLocaleString()}</span>
         </div>
-        ${c.reportId?`<div class="cc-meta" style="margin-bottom:6px;color:var(--accent);font-weight:600;">Report: <span style="font-family:'DM Mono',monospace;">#${c.reportId.replace('#','')}</span></div>`:''}
-        <div class="cc-msg" style="color:var(--muted);font-weight:500;">${c.msg}</div>
+        ${(c.reportId||c.report_id)?`<div class="cc-meta" style="margin-bottom:6px;color:var(--accent);font-weight:600;">Report: <span style="font-family:'DM Mono',monospace;">#${(c.reportId||c.report_id||'').replace('#','')}</span></div>`:''}
+        <div class="cc-msg" style="color:var(--muted);font-weight:500;">${c.msg||c.message}</div>
       </div>
     </div>`).join('');
 }
 
 // Authority complaints view
-function loadAuthComplaints() {
-  const complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+async function loadAuthComplaints() {
   const el = document.getElementById('auth-complaints-list');
+  el.innerHTML = `<div class="empty"><div class="ei">⏳</div><div class="et">Loading...</div></div>`;
+  let complaints = [];
+  try {
+    const res = await fetch(`${API}/complaints`);
+    const data = await res.json();
+    complaints = data.complaints || [];
+    localStorage.setItem('complaints_v2', JSON.stringify(complaints));
+  } catch(e) {
+    complaints = JSON.parse(localStorage.getItem('complaints_v2')||'[]');
+  }
   if(!complaints.length){ el.innerHTML=`<div class="empty"><div class="ei">📭</div><div class="et">No complaints yet</div></div>`; return; }
   el.innerHTML = complaints.map(c=>`
     <div class="complaint-card" style="display:flex;align-items:center;">
-      ${getReportThumbHtml(c.reportId)}
+      ${getReportThumbHtml(c.reportId||c.report_id)}
       <div style="flex:1;">
         <div class="cc-head" style="margin-bottom:4px;">
           <span style="font-weight:700;font-size:13px;color:var(--text);">${c.type}</span>
           <span class="cc-meta">${new Date(c.timestamp).toLocaleString()}</span>
         </div>
-        ${c.reportId?`<div class="cc-meta" style="margin-bottom:6px;color:var(--accent);font-weight:600;">Report: <span style="font-family:'DM Mono',monospace;">#${c.reportId.replace('#','')}</span></div>`:''}
-        <div class="cc-msg" style="color:var(--muted);font-weight:500;">${c.msg}</div>
+        ${(c.reportId||c.report_id)?`<div class="cc-meta" style="margin-bottom:6px;color:var(--accent);font-weight:600;">Report: <span style="font-family:'DM Mono',monospace;">#${(c.reportId||c.report_id||'').replace('#','')}</span></div>`:''}
+        <div class="cc-msg" style="color:var(--muted);font-weight:500;">${c.msg||c.message}</div>
       </div>
     </div>`).join('');
 }
@@ -1680,33 +1666,51 @@ function setStar(n) {
   document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('active',i<n));
 }
 
-function submitRating() {
+async function submitRating() {
   if(!selectedStar){ showToast('⚠️ Please select a star rating'); return; }
-  const ratings = JSON.parse(localStorage.getItem('ratings')||'[]');
-  ratings.unshift({
-    stars: selectedStar,
-    comment: document.getElementById('rate-comment').value,
-    timestamp: new Date().toISOString()
-  });
-  localStorage.setItem('ratings', JSON.stringify(ratings));
+  const comment = document.getElementById('rate-comment').value;
+  const newR = { stars: selectedStar, comment, timestamp: new Date().toISOString() };
+
+  // Save locally immediately
+  const local = JSON.parse(localStorage.getItem('ratings')||'[]');
+  local.unshift(newR);
+  localStorage.setItem('ratings', JSON.stringify(local));
+
+  // POST to Firebase via backend
+  try {
+    const fd = new FormData();
+    fd.append('stars', selectedStar);
+    fd.append('comment', comment);
+    await fetch(`${API}/ratings`, { method: 'POST', body: fd });
+  } catch(e) { console.warn('Rating sync failed, stored locally:', e); }
+
   document.getElementById('rate-comment').value='';
   setStar(0); selectedStar=0;
   document.getElementById('star-label').textContent='Thank you for your feedback!';
   showToast('⭐ Rating submitted!');
 }
 
-function loadRatings() {
-  const ratings = JSON.parse(localStorage.getItem('ratings')||'[]');
-  const avg = ratings.length ? (ratings.reduce((a,r)=>a+r.stars,0)/ratings.length).toFixed(1) : '—';
+async function loadRatings() {
+  const el = document.getElementById('ratings-list');
+  el.innerHTML = `<div class="empty"><div class="ei">⏳</div><div class="et">Loading...</div></div>`;
+  let ratings = [];
+  try {
+    const res = await fetch(`${API}/ratings`);
+    const data = await res.json();
+    ratings = data.ratings || [];
+    localStorage.setItem('ratings', JSON.stringify(ratings));
+  } catch(e) {
+    ratings = JSON.parse(localStorage.getItem('ratings')||'[]');
+  }
+  const avg = ratings.length ? (ratings.reduce((a,r)=>a+(r.stars||0),0)/ratings.length).toFixed(1) : '—';
   document.getElementById('avg-rating').textContent = avg;
   document.getElementById('total-ratings').textContent = ratings.length;
   document.getElementById('five-star').textContent = ratings.filter(r=>r.stars===5).length;
-  const el = document.getElementById('ratings-list');
   if(!ratings.length){ el.innerHTML=`<div class="empty"><div class="ei">⭐</div><div class="et">No ratings yet</div></div>`; return; }
   el.innerHTML = ratings.map(r=>`
     <div class="complaint-card">
       <div class="cc-head">
-        <span>${'⭐'.repeat(r.stars)}</span>
+        <span>${'⭐'.repeat(r.stars||0)}</span>
         <span class="cc-meta">${new Date(r.timestamp).toLocaleString()}</span>
       </div>
       ${r.comment?`<div class="cc-msg">${r.comment}</div>`:''}

@@ -120,6 +120,45 @@ def get_severity(box_area, image_area):
     else:
         return "LOW"
 
+def draw_detections_on_image(image, predictions):
+    """Draw thin bounding boxes + small labels so potholes remain visible"""
+    severity_colors = {
+        "HIGH":   (0, 0, 220),
+        "MEDIUM": (0, 140, 255),
+        "LOW":    (30, 180, 30),
+    }
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.45
+    thickness = 1
+
+    for p in predictions:
+        b = p["box"]
+        x1, y1, x2, y2 = b["x1"], b["y1"], b["x2"], b["y2"]
+        color = severity_colors.get(p["severity"], (200, 200, 200))
+
+        # Thin bounding box (1px)
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, 1)
+
+        # Small corner accents
+        cl = min(10, (x2-x1)//4, (y2-y1)//4)
+        cv2.line(image, (x1, y1), (x1+cl, y1), color, 2)
+        cv2.line(image, (x1, y1), (x1, y1+cl), color, 2)
+        cv2.line(image, (x2, y1), (x2-cl, y1), color, 2)
+        cv2.line(image, (x2, y1), (x2, y1+cl), color, 2)
+        cv2.line(image, (x1, y2), (x1+cl, y2), color, 2)
+        cv2.line(image, (x1, y2), (x1, y2-cl), color, 2)
+        cv2.line(image, (x2, y2), (x2-cl, y2), color, 2)
+        cv2.line(image, (x2, y2), (x2, y2-cl), color, 2)
+
+        # Small label ABOVE the box so pothole is visible
+        label = f"{p['severity']} {p['confidence']:.0f}%"
+        (tw, th), _ = cv2.getTextSize(label, font, font_scale, thickness)
+        label_y = max(th + 4, y1 - 4)
+        cv2.rectangle(image, (x1, label_y - th - 4), (x1 + tw + 6, label_y + 2), color, -1)
+        cv2.putText(image, label, (x1 + 3, label_y - 1), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+    return image
+
 # ─────────────────────────────────────────────
 # ROUTES
 # ─────────────────────────────────────────────
@@ -204,7 +243,8 @@ async def detect_pothole(
     reported_by: str = Form("citizen"),
 ):
     try:
-        jurisdiction = await asyncio.to_thread(get_jurisdiction, latitude, longitude)
+        # Run geocoding in parallel with detection (not blocking)
+        jurisdiction_task = asyncio.get_event_loop().run_in_executor(None, get_jurisdiction, latitude, longitude)
         contents = await file.read()
         
         is_video = False
@@ -278,7 +318,7 @@ async def detect_pothole(
                 score = sev_rank[overall] * 100 + len(predictions)
                 if score > best_score:
                     best_score = score
-                    best_image = results[0].plot(line_width=2, font_size=1) if len(predictions) > 0 else frame.copy()
+                    best_image = frame.copy()
                     best_predictions = predictions
                     best_overall = overall
                     
@@ -291,6 +331,9 @@ async def detect_pothole(
             image = best_image if best_image is not None else first_frame
             if image is None:
                 return JSONResponse({"error": "Failed to read video frames"}, status_code=400)
+            
+            if best_predictions:
+                image = draw_detections_on_image(image, best_predictions)
                 
             predictions = best_predictions
             overall = best_overall
@@ -339,8 +382,11 @@ async def detect_pothole(
                 elif any(p["severity"] == "MEDIUM" for p in predictions): overall = "MEDIUM"
                 else: overall = "LOW"
 
-            if results and len(predictions) > 0:
-                image = results[0].plot(line_width=2, font_size=1)
+            if predictions:
+                image = draw_detections_on_image(image, predictions)
+
+        # Await geocoding result
+        jurisdiction = await jurisdiction_task
 
         report_id = str(uuid.uuid4())[:8]
         image_path = f"images/uploads/{report_id}.jpg"
